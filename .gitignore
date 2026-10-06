@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.idea/
+.env
+.env.*
+!.env.example
+data/*.csv
+reports/*.csv
+
+# Generated reconciliation reports can contain customer details.
+/reports/

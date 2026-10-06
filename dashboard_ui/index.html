@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Spiro | Reconciliation</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-mark">S</span><span>SPIRO<span class="brand-sub">OPERATIONS</span></span></a>
+    <div class="nav-label">WORKSPACE</div><a class="nav-item active" href="/">▤ <span>Reconciliation</span></a>
+    <div class="sidebar-bottom"><span class="status-dot"></span> Local workspace<span class="sidebar-note">Kenya & Rwanda</span></div>
+  </aside>
+  <main>
+    <header class="page-header"><div><div class="eyebrow">FINANCE OPERATIONS / RECONCILIATION</div><h1>Wallet &amp; swap reconciliation</h1><p>Track wallet deductions and investigate transactions that need attention.</p></div><span class="workspace-tag">Spiro operations</span></header>
+    <div class="source-note"><span class="note-icon">i</span><div><strong>Source coverage needs verification</strong><span>Results reflect loaded Zoho exports. Review candidates require investigation.</span></div><span id="updated" class="updated">Connecting…</span></div>
+    <details class="import-panel" id="import-panel">
+      <summary><span class="import-icon">＋</span><span><strong>Add files &amp; manage data</strong><span class="import-summary">Upload Zoho exports and refresh this dashboard</span></span><span class="import-open">Open ↓</span></summary>
+      <div class="import-body">
+        <div class="section-heading"><h2>Loaded data</h2><button type="button" class="reset" id="refresh-sources">Refresh</button></div>
+        <div id="source-inventory" class="source-inventory">Loading data sources…</div>
+        <div class="upload-area"><div><h2>Add Zoho exports</h2><p>Choose Wallets, Wallet Transactions or Swapping Transactions CSV files for Kenya or Rwanda. The module is detected from the original column headers.</p></div>
+          <label for="upload-files" class="file-label">CSV files <span>Up to 10 files, 512 MB each</span></label><input id="upload-files" type="file" accept=".csv,text/csv" multiple>
+          <p class="upload-hint">For exports over 200,000 rows, use date batches. Overlapping files are merged by Record Id. No balance or refund action is performed.</p>
+          <div class="upload-actions"><button type="button" class="button secondary" id="validate-files" disabled>Validate files</button><button type="button" class="button primary" id="import-files" disabled>Import validated files ↗</button><button type="button" class="reset" id="clear-files" disabled>Clear</button></div>
+        </div>
+        <p id="upload-message" class="upload-message" role="status" aria-live="polite"></p><div id="upload-error" class="error-banner" role="alert" hidden></div><div id="upload-jobs" class="upload-jobs"></div>
+        <details class="import-history"><summary>Recent imports</summary><div id="import-history">No imports yet.</div></details>
+      </div>
+    </details>
+    <form id="filters" class="filter-bar">
+      <label>COUNTRY<select id="country"><option value="">All countries</option><option>Kenya</option><option>Rwanda</option></select></label>
+      <label>FROM<input id="start" type="date" aria-label="From date"></label>
+      <label>THROUGH<input id="end" type="date" aria-label="Through date"></label>
+      <label class="status-filter">RESULT<select id="status"><option value="">All results</option><option value="no_swap_in_loaded_data">No loaded swap</option><option value="matched">Matched</option><option value="amount_mismatch">Amount difference</option><option value="no_successful_swap_in_loaded_data">No successful swap</option><option value="ambiguous_transaction_id">Duplicate reference</option><option value="missing_wallet_transaction_id">Missing reference</option><option value="missing_amount">Missing amount</option></select></label>
+      <button type="submit" class="button primary" id="apply">Apply filters <span>↗</span></button><button type="button" class="reset" id="reset">Reset</button>
+    </form>
+    <div id="error" class="error-banner" role="alert" hidden></div>
+    <section class="metrics" aria-label="Reconciliation summary">
+      <article class="metric"><div class="metric-top">FILTERED DEDUCTIONS <span>↗</span></div><strong id="total">—</strong><div>Committed wallet debits for swaps</div></article>
+      <article class="metric"><div class="metric-top">MATCHED <span class="green">✓</span></div><strong id="matched">—</strong><div>Successful swap with equal amount</div></article>
+      <article class="metric attention"><div class="metric-top">NEED REVIEW <span>!</span></div><strong id="review">—</strong><div>Unmatched deductions and other flags</div></article>
+      <article class="metric"><div class="metric-top">NO LOADED SWAP <span>⇄</span></div><strong id="unmatched">—</strong><div>A corresponding swap is not loaded</div></article>
+    </section>
+    <section class="country-section"><div class="section-heading"><h2>Country overview</h2><span>Counts remain separate by country</span></div><div id="countries" class="country-grid"><div class="country-placeholder">Loading country results…</div></div></section>
+    <section class="table-section">
+      <div class="table-heading"><div><h2>Transaction review <span id="case-count" class="count-pill">—</span></h2><p id="table-caption">Customer details and reconciliation reasons for each deduction.</p></div><div class="table-tools"><label class="toggle-label"><input type="checkbox" id="review-only" checked><span>Review candidates only</span></label><button class="button secondary" id="export" type="button">↓ Export candidates</button></div></div>
+      <div class="table-scroll"><table><thead><tr><th>CUSTOMER</th><th>COUNTRY</th><th>DEDUCTION REFERENCE</th><th class="amount-column">AMOUNT</th><th>RESULT</th><th>CREATED ON</th><th><span class="sr-only">Details</span></th></tr></thead><tbody id="rows"><tr><td colspan="7" class="empty-state">Loading transactions…</td></tr></tbody></table></div>
+      <div class="pagination"><span id="page-info">—</span><div><button id="previous" class="page-button" disabled>← Previous</button><button id="next" class="page-button" disabled>Next →</button></div></div>
+    </section>
+    <footer>Times are shown as exported by Zoho. Currency and customer details come from the current wallet snapshot. Add new exports under “Add files &amp; manage data”.</footer>
+  </main>
+  <div id="drawer-overlay" class="drawer-overlay" hidden></div><aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-label="Transaction details" hidden><div class="drawer-header"><div class="eyebrow">TRANSACTION REVIEW</div><button id="close-drawer" aria-label="Close details">×</button></div><div id="drawer-content"></div></aside>
+</body>
+</html>

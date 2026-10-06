@@ -10,6 +10,7 @@ PROJECT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT))
 sys.path.insert(1, str(PROJECT / 'tests'))
 from fixtures import load_fixtures
+from app.dashboard_cache import install_cache
 
 
 def main():
@@ -28,6 +29,7 @@ def main():
             for name in ('schema.sql', 'wallets.sql', 'reconciliation.sql', 'tracking_indexes.sql'):
                 conn.execute((PROJECT / 'sql' / name).read_text(encoding='utf-8'))
             load_fixtures(conn)
+            install_cache(conn)
     suite = unittest.defaultTestLoader.discover(str(PROJECT / 'tests'), pattern='test_*.py')
     result = unittest.TextTestRunner(verbosity=2).run(suite)
     return 0 if result.wasSuccessful() else 1

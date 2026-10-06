@@ -119,8 +119,9 @@ UNMATCHABLE_QUERIES = {
 }
 
 
-def report_query(group, filters, *, classification=None, cursor=None, order='country', detail=True, record_ids=None):
+def report_query(group, filters, *, classification=None, cursor=None, order='country', detail=True, record_ids=None, cached=False):
     alias = 'w' if group == 'wallet_without_swap' else 's'
+    record = ('wallet_record_id' if group == 'wallet_without_swap' else 'swap_record_id') if cached else 'zoho_record_id'
     clauses, values = [], []
     if filters.country:
         clauses.append(f'{alias}.country=%s'); values.append(filters.country)
@@ -142,11 +143,15 @@ def report_query(group, filters, *, classification=None, cursor=None, order='cou
     if cursor is not None:
         if not isinstance(cursor, str) or not cursor.strip():
             raise ValueError('Provide a nonblank source Record Id cursor.')
-        clauses.append(f'{alias}.zoho_record_id > %s'); values.append(cursor)
+        clauses.append(f'{alias}.{record} > %s'); values.append(cursor)
     if record_ids is not None:
-        clauses.append(f'{alias}.zoho_record_id = ANY(%s)'); values.append(record_ids)
+        clauses.append(f'{alias}.{record} = ANY(%s)'); values.append(record_ids)
     suffix = ' AND ' + ' AND '.join(clauses) if clauses else ''
-    if detail:
+    if cached:
+        view = 'dashboard_wallet_gaps' if group == 'wallet_without_swap' else 'dashboard_swap_gaps'
+        fields = f'{alias}.*' if detail else f'{alias}.country, {alias}.{record} AS zoho_record_id'
+        statement = f'SELECT {fields} FROM reconciliation.{view} {alias} WHERE true{suffix}'
+    elif detail:
         statement = QUERIES[group].format(filters=suffix)
     elif classification == 'valid':
         statement = TRACKING_QUERIES[group].format(filters=suffix)
@@ -155,9 +160,9 @@ def report_query(group, filters, *, classification=None, cursor=None, order='cou
     else:
         raise ValueError('Core tracking queries require an identifier classification.')
     if order == 'country':
-        statement += f' ORDER BY {alias}.country NULLS LAST, {alias}.zoho_record_id'
+        statement += f' ORDER BY {alias}.country NULLS LAST, {alias}.{record}'
     elif order == 'id':
-        statement += f' ORDER BY {alias}.zoho_record_id'
+        statement += f' ORDER BY {alias}.{record}'
     elif order is not None:
         raise ValueError('Unknown report ordering.')
     return statement, values

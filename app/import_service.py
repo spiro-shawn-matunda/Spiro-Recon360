@@ -12,6 +12,7 @@ from pathlib import Path
 import psycopg
 from psycopg import sql
 from .import_csv import MAPS, TABLES, import_file, read_rows
+from .dashboard_cache import install_cache, refresh_cache
 
 from . import PROJECT_ROOT
 
@@ -29,6 +30,8 @@ def prepare_database(settings):
             conn.execute('SELECT pg_advisory_xact_lock(18700)')
             for name in ('schema.sql', 'wallets.sql', 'reconciliation.sql', 'tracking_indexes.sql'):
                 conn.execute((PROJECT / 'sql' / name).read_text(encoding='utf-8'))
+            install_cache(conn)
+        refresh_cache(conn)
 
 
 def safe_filename(value):
@@ -186,12 +189,18 @@ class ImportJobs:
             with psycopg.connect(**self.settings, connect_timeout=15, autocommit=True) as conn:
                 result = import_file(conn, job['_path'], job['preview']['dataset'], sql,
                                      progress=lambda rows, phase: self.update(key, processed_rows=rows, phase=phase))
-                self.update(key, state='complete', phase='imported', result=result, processed_rows=result['rows_read'])
+                self.update(key, phase='Refreshing dashboard results', result=result, processed_rows=result['rows_read'])
                 # The data is already committed; statistics failure must not report an import failure.
                 try:
                     conn.execute(sql.SQL('ANALYZE {}').format(sql.Identifier('reconciliation', TABLES[job['preview']['dataset']])))
                 except psycopg.Error:
                     pass
+                # Import is committed. Never claim rollback if a derived refresh fails.
+                try:
+                    refresh_cache(conn)
+                except Exception:
+                    self.update(key, warning='The file was imported. Dashboard results will retry recalculation when refreshed.')
+                self.update(key, state='complete', phase='imported')
         except psycopg.Error:
             self.update(key, state='failed', phase='import failed', error='The database import failed and this file was rolled back. Check the database connection and permissions, then choose the file again.')
         except Exception:

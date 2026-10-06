@@ -178,5 +178,18 @@ class UploadIntegrationTests(unittest.TestCase):
             finally:
                 conn.execute('ALTER TABLE reconciliation.wallets DROP CONSTRAINT selfservice_test_reject')
 
+    def test_cache_refresh_failure_keeps_committed_import_and_retries_on_read(self):
+        record = {'Record Id': 'selfservice-test-cache-retry', 'Country': 'Kenya', 'Currency': 'KES'}
+        job = self.upload(csv_bytes(records=[record]), 'selfservice-test-cache-retry.csv')
+        with patch('app.import_service.refresh_cache', side_effect=psycopg.OperationalError('Fixture refresh failure')):
+            self.assertEqual(self.commit(job['id'])[0], 202)
+            imported = self.wait(job['id'])
+        self.assertEqual(imported['state'], 'complete')
+        self.assertEqual(imported['result']['rows_applied'], 1)
+        self.assertIn('was imported', imported['warning'])
+        with psycopg.connect(**self.settings) as conn:
+            self.assertEqual(conn.execute("SELECT count(*) FROM reconciliation.wallets WHERE zoho_record_id='selfservice-test-cache-retry'").fetchone()[0], 1)
+        self.assertEqual(self.request('/api/dashboard?country=Kenya')[0], 200)
+
 
 if __name__ == '__main__': unittest.main()

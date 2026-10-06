@@ -112,8 +112,10 @@ def _rows(conn, statement, params):
 class ReconciliationBackend:
     """Queries only; the caller owns the connection and transaction lifetime."""
 
-    def __init__(self, conn):
+    def __init__(self, conn, *, cached=False):
         self.conn = conn
+        self.cached = cached
+        self.view = 'reconciliation.dashboard_reconciliation' if cached else VIEW
 
     def summary(self, filters=None):
         filters = filters or ReconciliationFilter()
@@ -124,7 +126,7 @@ class ReconciliationBackend:
             count(*) FILTER (WHERE r.needs_review) AS needs_review_count,
             count(*) FILTER (WHERE r.coverage_assessment='within_observed_swap_span') AS within_observed_span_count,
             count(*) FILTER (WHERE r.coverage_assessment='after_observed_swap_cutoff') AS after_cutoff_count
-            FROM {VIEW} r{_where(conditions)}
+            FROM {self.view} r{_where(conditions)}
             GROUP BY r.country, r.wallet_currency, r.reconciliation_status
             ORDER BY r.country, r.wallet_currency, r.reconciliation_status""", params)
         return {"filters": filters.as_dict(), "source_coverage_status": "not_verified",
@@ -147,7 +149,7 @@ class ReconciliationBackend:
             conditions.append("r.wallet_record_id > %s")
             params.append(after_record_id)
         params.append(limit + 1)
-        rows = _rows(self.conn, f"SELECT {DETAIL_FIELDS} FROM {VIEW} r{_where(conditions)} "
+        rows = _rows(self.conn, f"SELECT {DETAIL_FIELDS} FROM {self.view} r{_where(conditions)} "
                      "ORDER BY r.wallet_record_id LIMIT %s", params)
         has_more = len(rows) > limit
         records = rows[:limit]
@@ -158,6 +160,11 @@ class ReconciliationBackend:
         if not isinstance(wallet_record_id, str) or not wallet_record_id.strip():
             raise ValueError("Provide a source wallet transaction Record Id.")
         conditions, params = _conditions(ReconciliationFilter(country=country))
+        if self.cached:
+            conditions.append('r.wallet_record_id = %s')
+            params.append(wallet_record_id)
+            rows = _rows(self.conn, f'SELECT {DETAIL_FIELDS} FROM {self.view} r{_where(conditions)}', params)
+            return rows[0] if rows else None
         # Restrict the complete reference partition, preserving duplicate checks
         # while avoiding a whole-country window scan for one detail request.
         target = self.conn.execute('''SELECT country, transaction_id
@@ -174,5 +181,5 @@ class ReconciliationBackend:
                 params.append(value)
         conditions.append("r.wallet_record_id = %s")
         params.append(wallet_record_id)
-        rows = _rows(self.conn, f"SELECT {DETAIL_FIELDS} FROM {VIEW} r{_where(conditions)}", params)
+        rows = _rows(self.conn, f"SELECT {DETAIL_FIELDS} FROM {self.view} r{_where(conditions)}", params)
         return rows[0] if rows else None

@@ -6,6 +6,10 @@ Reconcile Zoho wallet deductions and swaps for Kenya and Rwanda. Upload exports,
 
 In PyCharm, use the project's interpreter and run **main.py** or **Spiro - Main**. Open **http://127.0.0.1:8765/** and keep the run active. Startup prepares database tables/views/indexes and preserves existing source records. Connection settings always come from the project's root `.env`.
 
+The overview opens with the deduction, matched, review and missing-swap cards plus country cards. **Missing counterparts** keeps the two missing-record groups and identifier checks available in a separate tab.
+
+Dashboard results are stored in indexed PostgreSQL materialized views. The first run builds these results once; normal loads reuse them. Imports refresh them before reporting completion. Changes to any source table also invalidate the stored results, including changes made through DBeaver. The next read rebuilds a dirty cache. An unchanged restart does not recalculate matching. Original tables and report rules remain the source of truth; Python report commands can still query them directly.
+
 For a fresh clone, copy `.env.example` to `.env`, enter PostgreSQL connection details, and install `requirements.txt` in your project environment.
 
 Choose **Add files & manage data → Validate files → Import validated files** to load Wallets, Wallet Transactions and Swapping Transactions CSVs. Files merge by Record Id, and Wallet PINs are excluded. Completed imports refresh the active view. Use date batches for Zoho exports that exceed its export cap.
@@ -32,6 +36,7 @@ reports/      Generated reports, ignored by Git
 | Reconciliation rules | `app/reconciliation_backend.py`, `sql/` |
 | Missing-counterpart groups | `app/counterpart_tracking.py`, `app/missing_counterparts.py` |
 | PostgreSQL settings | `.env` and `app/db_config.py` |
+| Dashboard performance and refresh | `app/dashboard_cache.py`, `sql/dashboard_cache.sql` |
 
 Keep dashboard code in `app/` and `web/`. Optional helpers and their old PyCharm launch configurations are in `tools/`. The sole active launch configuration is **Spiro - Main**. SQL examples are under `sql/examples/`; existing reports are under `reports/reconciliation/` or `reports/missing_counterparts/`.
 

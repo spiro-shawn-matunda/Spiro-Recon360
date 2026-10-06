@@ -4,6 +4,7 @@ import csv
 import io
 import json
 import secrets
+import socket
 import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -17,6 +18,7 @@ from .reconcile import EXPORT_FIELDS
 from .reconciliation_backend import ReconciliationBackend, ReconciliationFilter
 from .import_service import ImportJobs, MAX_UPLOAD_BYTES, source_inventory
 from . import counterpart_tracking
+from .dashboard_cache import cache_ready, ensure_cache
 
 from . import PROJECT_ROOT
 
@@ -28,6 +30,12 @@ MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", 
 
 class DashboardServer(ThreadingHTTPServer):
     daemon_threads = True
+    allow_reuse_address = not hasattr(socket, 'SO_EXCLUSIVEADDRUSE')
+
+    def server_bind(self):
+        if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+        super().server_bind()
 
     def __init__(self, address, database_settings):
         self.database_settings = database_settings
@@ -42,11 +50,12 @@ class DashboardServer(ThreadingHTTPServer):
 
 @contextmanager
 def snapshot(settings):
+    ensure_cache(settings)
     with psycopg.connect(**settings, connect_timeout=15, autocommit=True) as conn:
         with conn.transaction():
             conn.execute("SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY")
             conn.execute("SET LOCAL statement_timeout = '120s'")
-            yield ReconciliationBackend(conn)
+            yield ReconciliationBackend(conn, cached=cache_ready(conn))
 
 
 def query_options(query, allowed):
@@ -155,10 +164,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 counterpart_tracking.selection(group)
                 with snapshot(self.server.database_settings) as backend:
                     if parsed.path == '/api/counterparts/export':
-                        body = counterpart_tracking.export(backend.conn, group, filters)
+                        body = counterpart_tracking.export(backend.conn, group, filters, cached=backend.cached)
                     else:
-                        result = {'summary': counterpart_tracking.summary(backend.conn, filters),
-                                  'page': counterpart_tracking.page(backend.conn, group, filters, limit=limit, cursor=cursor),
+                        result = {'summary': counterpart_tracking.summary(backend.conn, filters, cached=backend.cached),
+                                  'page': counterpart_tracking.page(backend.conn, group, filters, limit=limit, cursor=cursor, cached=backend.cached),
                                   'group': group, 'generated_at_utc': datetime.now(timezone.utc).isoformat()}
                 if parsed.path == '/api/counterparts/export':
                     self.respond(200, body, 'text/csv; charset=utf-8', filename=group+'_tracking.csv')

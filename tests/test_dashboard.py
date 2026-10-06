@@ -42,6 +42,11 @@ class DashboardTests(unittest.TestCase):
         for path in ('/.env','/../.env','/%2e%2e/.env','/config.json','/data/Wallet_2026_10_05.csv'):
             with self.subTest(path=path):self.assertEqual(self.request(path)[0],404)
 
+    def test_duplicate_dashboard_cannot_share_an_active_port(self):
+        with self.assertRaises(OSError):
+            DashboardServer(('127.0.0.1', self.port), self.server.database_settings)
+        self.assertEqual(self.request('/api/session')[0], 200)
+
     def test_rejects_untrusted_hosts_origins_and_writes(self):
         for headers in ({'Host':'other.example'},{'Origin':'https://other.example'},{'Sec-Fetch-Site':'cross-site'}):
             self.assertEqual(self.request('/api/dashboard',headers=headers)[0],403)

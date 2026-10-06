@@ -1,7 +1,9 @@
 """Read PostgreSQL connection details from this project's .env file."""
 from pathlib import Path
 
-PROJECT = Path(__file__).resolve().parent
+from . import PROJECT_ROOT
+
+PROJECT = PROJECT_ROOT
 
 
 def read_database_config(env_path=None):

@@ -180,7 +180,7 @@ def main():
         from psycopg import sql
     except ImportError:
         raise SystemExit('Install the driver first: python -m pip install -r requirements.txt')
-    from db_config import read_database_config
+    from .db_config import read_database_config
     with psycopg.connect(**read_database_config(), connect_timeout=15, autocommit=True) as conn:
         for dataset, p in files: import_file(conn, p, dataset, sql)
         for dataset in {dataset for dataset, _ in files}:

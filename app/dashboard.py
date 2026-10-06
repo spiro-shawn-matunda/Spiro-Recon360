@@ -1,4 +1,4 @@
-"""TEC-189 local dashboard. Run in PyCharm, then open the printed URL."""
+"""Local Spiro dashboard. Run in PyCharm, then open the printed URL."""
 import argparse
 import csv
 import io
@@ -12,12 +12,15 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, unquote
 
 import psycopg
-from db_config import read_database_config
-from reconcile import EXPORT_FIELDS
-from reconciliation_backend import ReconciliationBackend, ReconciliationFilter
-from import_service import ImportJobs, MAX_UPLOAD_BYTES, source_inventory
+from .db_config import read_database_config
+from .reconcile import EXPORT_FIELDS
+from .reconciliation_backend import ReconciliationBackend, ReconciliationFilter
+from .import_service import ImportJobs, MAX_UPLOAD_BYTES, source_inventory
+from . import counterpart_tracking
 
-WEB = Path(__file__).resolve().parent / "dashboard_ui"
+from . import PROJECT_ROOT
+
+WEB = PROJECT_ROOT / "web"
 MAX_EXPORT_RECORDS = 10000
 STATIC = {"/": "index.html", "/styles.css": "styles.css", "/app.js": "app.js", "/favicon.svg": "favicon.svg"}
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml"}
@@ -143,6 +146,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
             elif parsed.path.startswith('/api/import-jobs/'):
                 key = parsed.path.removeprefix('/api/import-jobs/')
                 self.json(200, self.server.imports.status(key))
+            elif parsed.path in ('/api/counterparts', '/api/counterparts/export'):
+                allowed = {'country', 'start', 'end', 'group'}
+                if parsed.path == '/api/counterparts':
+                    allowed |= {'limit', 'cursor'}
+                filters, _, limit, cursor, values = query_options(parsed.query, allowed)
+                group = values.get('group', 'wallet_without_swap')
+                counterpart_tracking.selection(group)
+                with snapshot(self.server.database_settings) as backend:
+                    if parsed.path == '/api/counterparts/export':
+                        body = counterpart_tracking.export(backend.conn, group, filters)
+                    else:
+                        result = {'summary': counterpart_tracking.summary(backend.conn, filters),
+                                  'page': counterpart_tracking.page(backend.conn, group, filters, limit=limit, cursor=cursor),
+                                  'group': group, 'generated_at_utc': datetime.now(timezone.utc).isoformat()}
+                if parsed.path == '/api/counterparts/export':
+                    self.respond(200, body, 'text/csv; charset=utf-8', filename=group+'_tracking.csv')
+                else:
+                    self.json(200, result)
             elif parsed.path in ("/api/dashboard", "/api/records"):
                 filters, review, limit, cursor, _ = query_options(parsed.query, common | {"review_only", "limit", "cursor"})
                 with snapshot(self.server.database_settings) as backend:
@@ -169,7 +190,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except KeyError:
             self.json(404, {'error': 'File session expired. Choose the file again.'})
         except psycopg.Error:
-            self.json(503, {"error": "The database could not be queried. Check your project connection and run setup_reconciliation.py if needed."})
+            self.json(503, {"error": "The database could not be queried. Check your project connection and restart main.py if needed."})
         except (BrokenPipeError, ConnectionResetError):
             pass
 
@@ -255,7 +276,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if not 1024 <= args.port <= 65535:
         raise ValueError("Port must be between 1024 and 65535.")
-    from import_service import prepare_database
+    from .import_service import prepare_database
     settings = read_database_config()
     prepare_database(settings)
     serve(settings, args.port)

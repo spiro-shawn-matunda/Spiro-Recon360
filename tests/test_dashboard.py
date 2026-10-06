@@ -9,7 +9,7 @@ from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 from psycopg.conninfo import conninfo_to_dict
-from dashboard import DashboardServer
+from app.dashboard import DashboardServer
 
 
 @unittest.skipUnless(os.environ.get('SPIRO_TEST_DSN'), 'Explicit isolated test database required')

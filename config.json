@@ -1,14 +1,14 @@
 {
   "wallet_master_files": [
-    "data/Wallet_2026_10_05.csv",
+    "data/Kenya_Wallet_2026_10_05.csv",
     "data/Rwanda_Wallet_2026_10_05.csv"
   ],
   "wallet_files": [
-    "data/Wallet_Transactions_2026_10_05.csv",
+    "data/Kenya_Wallet_Transactions_2026_10_05.csv",
     "data/Rwanda_Wallet_Transactions_2026_10_05.csv"
   ],
   "swap_files": [
-    "data/Swapping_Transactions_2026_10_05.csv",
+    "data/Kenya_Swapping_Transactions_2026_10_05.csv",
     "data/Rwanda_Swapping_Transactions_2026_10_05.csv"
   ]
 }

@@ -9,15 +9,22 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 import psycopg
-from missing_counterparts import write_missing_reports
-from reconciliation_backend import ReconciliationFilter
+from app.missing_counterparts import write_missing_reports
+from app.reconciliation_backend import ReconciliationFilter
 
 
 class MainExportTests(unittest.TestCase):
     def test_main_dispatches_report_without_starting_dashboard(self):
         import main
-        with patch('missing_counterparts.main') as export, patch('main.read_database_config') as config:
+        with patch('app.missing_counterparts.main') as export, patch('main.read_database_config') as config:
             main.main(['--export-unmatched', '--country', 'Rwanda'])
+            export.assert_called_once_with(['--country', 'Rwanda'])
+            config.assert_not_called()
+
+    def test_main_dispatches_review_export_without_starting_dashboard(self):
+        import main
+        with patch('app.reconcile.main') as export, patch('main.read_database_config') as config:
+            main.main(['--export-review', '--country', 'Rwanda'])
             export.assert_called_once_with(['--country', 'Rwanda'])
             config.assert_not_called()
 

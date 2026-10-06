@@ -1,4 +1,4 @@
--- TEC-188: a read-only backend view over the existing reconciliation rules.
+-- a read-only backend view over the existing reconciliation rules.
 -- Observed export bounds do not establish complete source coverage.
 CREATE OR REPLACE VIEW reconciliation.backend_reconciliation AS
 WITH bounds AS (
@@ -34,4 +34,4 @@ SELECT flagged.*, cardinality(review_reasons) > 0 AS needs_review,
 FROM flagged;
 
 COMMENT ON VIEW reconciliation.backend_reconciliation IS
-    'TEC-188 read-only reconciliation results. Review flags are investigation candidates, not refund authorization. Currency/customer mapping comes from the current wallet snapshot.';
+    'Read-only reconciliation results. Review flags are investigation candidates, not refund authorization. Currency/customer mapping comes from the current wallet snapshot.';

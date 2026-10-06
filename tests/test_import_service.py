@@ -14,9 +14,9 @@ from unittest.mock import patch
 
 import psycopg
 from psycopg.conninfo import conninfo_to_dict
-from dashboard import DashboardServer
-from import_csv import MAPS
-from import_service import MAX_UPLOAD_BYTES, inspect_csv
+from app.dashboard import DashboardServer
+from app.import_csv import MAPS
+from app.import_service import MAX_UPLOAD_BYTES, inspect_csv
 
 
 def csv_bytes(dataset='wallet_master', records=None, extra_headers=()):
@@ -54,7 +54,7 @@ class ValidationTests(unittest.TestCase):
     def test_main_defaults_to_setup_and_dashboard(self):
         import main
         settings = {'example': 'test'}
-        with patch('main.read_database_config', return_value=settings), patch('import_service.prepare_database') as prepare, patch('dashboard.serve') as serve, patch('main.read_config') as config:
+        with patch('main.read_database_config', return_value=settings), patch('app.import_service.prepare_database') as prepare, patch('app.dashboard.serve') as serve, patch('tools.batch.read_config') as config:
             main.main(['--port', '8767'])
             prepare.assert_called_once_with(settings)
             serve.assert_called_once_with(settings, 8767)

@@ -1,4 +1,4 @@
-"""Read-only TEC-188 query interface for Python dashboards.
+"""Read-only reconciliation query interface for Python dashboards.
 
 Amounts are serialized as decimal strings; timestamps retain the source's
 unconfirmed timezone. Matching is owned by the PostgreSQL views, not duplicated

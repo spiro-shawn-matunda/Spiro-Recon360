@@ -11,8 +11,8 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 import psycopg
-from reconciliation_backend import ReconciliationBackend, ReconciliationFilter
-from reconcile import write_report
+from app.reconciliation_backend import ReconciliationBackend, ReconciliationFilter
+from app.reconcile import write_report
 
 
 class FilterValidationTests(unittest.TestCase):

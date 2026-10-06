@@ -7,19 +7,22 @@ from datetime import datetime, time, timezone
 from pathlib import Path
 
 import psycopg
-from db_config import read_database_config
-from reconciliation_backend import COUNTRIES, ReconciliationFilter
+from .db_config import read_database_config
+from .reconciliation_backend import COUNTRIES, ReconciliationFilter
 
-PROJECT = Path(__file__).resolve().parent
+from . import PROJECT_ROOT
+
+PROJECT = PROJECT_ROOT
 ELIGIBLE = """SELECT * FROM reconciliation.wallet_transactions
     WHERE transaction_type='Debit' AND status='Committed' AND settled_against='Swap'"""
 
 QUERIES = {
     'wallet_without_swap': f"""
         WITH eligible_wallets AS NOT MATERIALIZED ({ELIGIBLE}), bounds AS (
-            SELECT country, count(*) AS records, min(created_on) AS first_seen,
-                   max(created_on) AS last_seen
-            FROM reconciliation.swap_transactions GROUP BY country
+            SELECT c.country, 1 AS records,
+                   (SELECT min(created_on) FROM reconciliation.swap_transactions WHERE country=c.country) AS first_seen,
+                   (SELECT max(created_on) FROM reconciliation.swap_transactions WHERE country=c.country) AS last_seen
+            FROM (SELECT DISTINCT country FROM reconciliation.swap_transactions) c
         )
         SELECT w.country, w.zoho_record_id AS wallet_record_id, w.transaction_id,
                w.reference AS wallet_reference, w.wallet_id, m.wallet_code,
@@ -45,12 +48,13 @@ QUERIES = {
               AND nullif(btrim(w.transaction_id),'') IS NOT NULL
               AND nullif(btrim(w.country),'') IS NOT NULL
         ) {{filters}}
-        ORDER BY w.country NULLS LAST, w.zoho_record_id
     """,
     'swap_without_wallet': f"""
         WITH eligible_wallets AS NOT MATERIALIZED ({ELIGIBLE}), bounds AS (
-            SELECT country, count(*) AS records, min(created_on) AS first_seen,
-                   max(created_on) AS last_seen FROM eligible_wallets GROUP BY country
+            SELECT c.country, 1 AS records,
+                   (SELECT min(created_on) FROM eligible_wallets WHERE country=c.country) AS first_seen,
+                   (SELECT max(created_on) FROM eligible_wallets WHERE country=c.country) AS last_seen
+            FROM (SELECT DISTINCT country FROM eligible_wallets) c
         ), customers AS (
             SELECT country, customer_crm_id,
                    array_agg(DISTINCT customer_name) FILTER (WHERE customer_name IS NOT NULL) AS names,
@@ -91,12 +95,31 @@ QUERIES = {
               AND nullif(btrim(s.transaction_id),'') IS NOT NULL
               AND nullif(btrim(s.country),'') IS NOT NULL
         ) {{filters}}
-        ORDER BY s.country NULLS LAST, s.zoho_record_id
     """,
 }
 
+# Count and page the small set of missing source IDs before fetching customer
+# details. Keeping this scan unordered avoids a LIMIT-driven random index scan
+# through hundreds of thousands of otherwise matched source records.
+TRACKING_QUERIES = {
+    'wallet_without_swap': f"""SELECT w.country, w.zoho_record_id
+        FROM ({ELIGIBLE}) w WHERE NOT EXISTS (
+            SELECT 1 FROM reconciliation.swap_transactions s
+            WHERE s.country=w.country AND s.transaction_id=w.transaction_id
+        ) {{filters}}""",
+    'swap_without_wallet': f"""SELECT s.country, s.zoho_record_id
+        FROM reconciliation.swap_transactions s WHERE NOT EXISTS (
+            SELECT 1 FROM ({ELIGIBLE}) w
+            WHERE w.country=s.country AND w.transaction_id=s.transaction_id
+        ) {{filters}}""",
+}
+UNMATCHABLE_QUERIES = {
+    'wallet_without_swap': f'SELECT w.country, w.zoho_record_id FROM ({ELIGIBLE}) w WHERE true {{filters}}',
+    'swap_without_wallet': 'SELECT s.country, s.zoho_record_id FROM reconciliation.swap_transactions s WHERE true {filters}',
+}
 
-def report_query(group, filters):
+
+def report_query(group, filters, *, classification=None, cursor=None, order='country', detail=True, record_ids=None):
     alias = 'w' if group == 'wallet_without_swap' else 's'
     clauses, values = [], []
     if filters.country:
@@ -109,8 +132,35 @@ def report_query(group, filters):
         values.append(datetime.combine(filters.end_date, time.max))
     if filters.status:
         raise ValueError('Use country and date filters for missing-counterpart reports.')
+    identifiers = f"nullif(btrim({alias}.transaction_id),'') IS NOT NULL AND nullif(btrim({alias}.country),'') IS NOT NULL"
+    if classification == 'valid':
+        clauses.append('(' + identifiers + ')')
+    elif classification == 'unmatchable':
+        clauses.append('NOT (' + identifiers + ')')
+    elif classification is not None:
+        raise ValueError('Unknown identifier classification.')
+    if cursor is not None:
+        if not isinstance(cursor, str) or not cursor.strip():
+            raise ValueError('Provide a nonblank source Record Id cursor.')
+        clauses.append(f'{alias}.zoho_record_id > %s'); values.append(cursor)
+    if record_ids is not None:
+        clauses.append(f'{alias}.zoho_record_id = ANY(%s)'); values.append(record_ids)
     suffix = ' AND ' + ' AND '.join(clauses) if clauses else ''
-    return QUERIES[group].format(filters=suffix), values
+    if detail:
+        statement = QUERIES[group].format(filters=suffix)
+    elif classification == 'valid':
+        statement = TRACKING_QUERIES[group].format(filters=suffix)
+    elif classification == 'unmatchable':
+        statement = UNMATCHABLE_QUERIES[group].format(filters=suffix)
+    else:
+        raise ValueError('Core tracking queries require an identifier classification.')
+    if order == 'country':
+        statement += f' ORDER BY {alias}.country NULLS LAST, {alias}.zoho_record_id'
+    elif order == 'id':
+        statement += f' ORDER BY {alias}.zoho_record_id'
+    elif order is not None:
+        raise ValueError('Unknown report ordering.')
+    return statement, values
 
 
 def csv_value(field, value):

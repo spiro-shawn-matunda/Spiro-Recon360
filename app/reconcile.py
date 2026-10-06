@@ -1,4 +1,4 @@
-"""Run in PyCharm to build TEC-188 summaries and review-candidate reports."""
+"""Run in PyCharm to build reconciliation summaries and review-candidate reports."""
 import argparse
 import csv
 import json
@@ -7,10 +7,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import psycopg
-from db_config import read_database_config
-from reconciliation_backend import COUNTRIES, STATUSES, ReconciliationBackend, ReconciliationFilter
+from .db_config import read_database_config
+from .reconciliation_backend import COUNTRIES, STATUSES, ReconciliationBackend, ReconciliationFilter
 
-PROJECT = Path(__file__).resolve().parent
+from . import PROJECT_ROOT
+
+PROJECT = PROJECT_ROOT
 EXPORT_FIELDS = (
     "country", "wallet_record_id", "transaction_id", "wallet_reference",
     "wallet_id", "wallet_code", "wallet_customer_id", "wallet_customer_reference",
@@ -73,10 +75,10 @@ def main(argv=None):
     parser.add_argument("--start", help="First included deduction date, YYYY-MM-DD")
     parser.add_argument("--end", help="Last included deduction date, YYYY-MM-DD")
     parser.add_argument("--status", choices=STATUSES)
-    parser.add_argument("--output", type=Path, help="Report folder; default reports/TEC188/<country or all>")
+    parser.add_argument("--output", type=Path, help="Report folder; default reports/reconciliation/<country or all>")
     args = parser.parse_args(argv)
     filters = ReconciliationFilter(country=args.country, start_date=args.start, end_date=args.end, status=args.status)
-    output = args.output or PROJECT / "reports" / "TEC188" / (args.country or "all")
+    output = args.output or PROJECT / "reports" / "reconciliation" / (args.country or "all")
     with psycopg.connect(**read_database_config(), connect_timeout=15, autocommit=True) as conn:
         report, summary_path, candidates_path = write_report(conn, filters, output)
     for group in report["groups"]:

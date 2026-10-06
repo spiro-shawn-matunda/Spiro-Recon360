@@ -11,9 +11,11 @@ from pathlib import Path
 
 import psycopg
 from psycopg import sql
-from import_csv import MAPS, TABLES, import_file, read_rows
+from .import_csv import MAPS, TABLES, import_file, read_rows
 
-PROJECT = Path(__file__).resolve().parent
+from . import PROJECT_ROOT
+
+PROJECT = PROJECT_ROOT
 DATASETS = {'wallet_master': 'Wallets', 'wallet': 'Wallet transactions', 'swap': 'Swapping transactions'}
 MAX_UPLOAD_BYTES = 512 * 1024 * 1024
 MAX_JOBS = 30
@@ -25,7 +27,7 @@ def prepare_database(settings):
     with psycopg.connect(**settings, connect_timeout=15, autocommit=True) as conn:
         with conn.transaction():
             conn.execute('SELECT pg_advisory_xact_lock(18700)')
-            for name in ('01_create_tables.sql', '03_wallet_customer_mapping.sql', '06_backend_reconciliation.sql'):
+            for name in ('schema.sql', 'wallets.sql', 'reconciliation.sql', 'tracking_indexes.sql'):
                 conn.execute((PROJECT / 'sql' / name).read_text(encoding='utf-8'))
 
 

@@ -42,10 +42,11 @@
     <div class="results-toolbar" id="results-toolbar" hidden><span id="module-context">Swap</span><button type="button" id="refresh-results" class="reset">↻ Refresh results</button></div>
     <form id="filters" class="filter-bar" hidden>
       <label>COUNTRY<select id="country"><option value="">All countries</option><option>Kenya</option><option>Rwanda</option></select></label>
-      <label>FROM<input id="start" type="date" aria-label="From date"></label>
-      <label>THROUGH<input id="end" type="date" aria-label="Through date"></label>
+      <label>FROM<select id="start" aria-label="From date" aria-describedby="date-coverage" disabled><option value="">Loading dates…</option></select></label>
+      <label>THROUGH<select id="end" aria-label="Through date" aria-describedby="date-coverage" disabled><option value="">Loading dates…</option></select></label>
       <label class="status-filter">RESULT<select id="status"><option value="">All results</option><option value="no_swap_in_loaded_data">No loaded swap</option><option value="matched">Matched</option><option value="amount_mismatch">Amount difference</option><option value="no_successful_swap_in_loaded_data">No successful swap</option><option value="ambiguous_transaction_id">Duplicate reference</option><option value="missing_wallet_transaction_id">Missing reference</option><option value="missing_amount">Missing amount</option></select></label>
       <button type="submit" class="button primary" id="apply">Apply filters <span>↗</span></button><button type="button" class="reset" id="reset">Reset</button>
+      <p class="date-coverage" id="date-coverage" role="status" aria-live="polite">Choose a module to load available dates.</p>
     </form>
     <div id="error" class="error-banner" role="alert" hidden></div>
     <section id="home-content" class="home-content" aria-label="Available modules">

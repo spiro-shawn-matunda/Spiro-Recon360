@@ -38,3 +38,6 @@ main{margin-left:236px}
 .module-link{font-size:11px;font-weight:600;color:#537143;margin-top:auto}
 @media(max-width:1150px){.sidebar{width:214px;padding-inline:15px}main{margin-left:214px}.sidebar-nav .nav-item{font-size:12px}.home-intro{padding:22px}.home-intro h2{font-size:23px}.home-scope{display:none}}
 @media(max-width:750px){.sidebar{position:static;width:100%;height:auto;flex-direction:column;align-items:stretch;padding:17px 16px 10px}.sidebar .brand{align-self:flex-start}.sidebar-nav{margin-top:18px;padding-bottom:0;overflow:visible}.sidebar-nav>.nav-label{display:none}.sidebar-nav .nav-item{width:auto;margin:0;padding:10px 12px;font-size:12px}.sidebar-nav .nav-item>span{display:inline}.sidebar-nav>.nav-item{width:100%}.nav-group{margin-top:10px;padding-top:10px}.nav-children{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:5px}.nav-group .nav-item{width:100%;gap:8px}.sidebar-nav .nav-icon{font-size:17px;width:16px}.sidebar-bottom{display:none}main{margin-left:0}.home-intro{padding:20px;margin-bottom:24px}.home-intro h2{font-size:22px}.module-grid{grid-template-columns:1fr;gap:12px}.module-card{padding:20px}.module-description{max-width:none}}
+
+/* Date choices reflect the active module source, including gaps. */
+.filter-bar{flex-wrap:wrap}.date-coverage{flex:0 0 100%;margin:0;font-size:11px;line-height:1.6;color:var(--muted)}

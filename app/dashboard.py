@@ -79,6 +79,41 @@ def query_options(query, allowed):
     return filters, review == "true", limit, values.get("cursor") or None, values
 
 
+def filter_dates(conn, *, view='overview', country=None, group=None):
+    """Dates on the module's source records, independent of review outcomes.
+
+    Use exported creation dates, just like result filtering. In particular,
+    Dues/Offers constrain swap dates, not repayment or consumption dates.
+    """
+    ReconciliationFilter(country=country)
+    if view not in ('overview', 'counterparts', 'due', 'offer'):
+        raise ValueError('Choose a known module for date filters.')
+    wallet = view == 'overview'
+    if view == 'counterparts':
+        source, _ = counterpart_tracking.selection(group or 'wallet_without_swap')
+        wallet = source == 'wallet_without_swap'
+    elif group is not None:
+        raise ValueError('Tracking groups apply only to Missing Counterparts.')
+    table = 'wallet_transactions' if wallet else 'swap_transactions'
+    conditions = ["country IN ('Kenya', 'Rwanda')", 'created_on IS NOT NULL']
+    values = []
+    if wallet:
+        conditions += ["transaction_type='Debit'", "status='Committed'", "settled_against='Swap'"]
+    if view in ('due', 'offer'):
+        conditions.append('payment_method=%s')
+        values.append('DUE_CREATED' if view == 'due' else 'OFFER_APPLIED')
+    if country:
+        conditions.append('country=%s')
+        values.append(country)
+    rows = conn.execute('SELECT DISTINCT created_on::date FROM reconciliation.' + table
+                        + ' WHERE ' + ' AND '.join(conditions) + ' ORDER BY 1', values).fetchall()
+    dates = [row[0].isoformat() for row in rows]
+    return {'view': view, 'country': country, 'group': group, 'dates': dates,
+            'first_date': dates[0] if dates else None,
+            'last_date': dates[-1] if dates else None,
+            'date_basis': 'source_created_on'}
+
+
 def export_candidates(backend, filters):
     stream = io.StringIO(newline="")
     writer = csv.DictWriter(stream, fieldnames=EXPORT_FIELDS)
@@ -152,6 +187,12 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 self.json(200, {'csrf_token': self.server.csrf_token, 'max_upload_bytes': MAX_UPLOAD_BYTES})
             elif parsed.path == '/api/sources':
                 self.json(200, source_inventory(self.server.database_settings))
+            elif parsed.path == '/api/filter-dates':
+                filters, _, _, _, values = query_options(parsed.query, {'view', 'country', 'group'})
+                with snapshot(self.server.database_settings) as backend:
+                    result = filter_dates(backend.conn, view=values.get('view') or 'overview',
+                                          country=filters.country, group=values.get('group') or None)
+                self.json(200, result)
             elif parsed.path.startswith('/api/import-jobs/'):
                 key = parsed.path.removeprefix('/api/import-jobs/')
                 self.json(200, self.server.imports.status(key))

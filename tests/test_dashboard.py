@@ -57,6 +57,10 @@ class DashboardTests(unittest.TestCase):
         self.assertEqual(status,200)
         data=json.loads(body)
         self.assertTrue(all(g['country']=='Kenya' for g in data['summary']['groups']))
+        self.assertTrue(all(g['country']=='Kenya' for g in data['swap_review']['by_country']))
+        self.assertEqual(data['swap_review']['open_count'] + data['swap_review']['resolved_paid_due_count']
+                         + data['swap_review']['resolved_offer_count'],
+                         data['swap_review']['total_count'])
         first=data['page'];self.assertEqual(len(first['records']),2);self.assertTrue(first['has_more'])
         status,_,body=self.request('/api/records?country=Kenya&review_only=false&limit=2&cursor='+first['next_cursor'])
         self.assertEqual(status,200)
@@ -88,6 +92,38 @@ class DashboardTests(unittest.TestCase):
         self.assertTrue(all(r['country']=='Kenya' and r['reconciliation_status']=='matched' for r in rows))
         self.assertNotIn('matched',{r['wallet_record_id'] for r in rows})
         self.assertTrue(all(json.loads(row['review_reasons']) for row in rows))
+
+    def test_due_swap_routes_and_invalid_filters(self):
+        status, _, body = self.request('/api/due-swaps?country=Kenya&limit=2')
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        self.assertEqual(data['summary']['matching_key'], 'country + Swapping Transaction.id')
+        self.assertEqual(data['summary']['repayment_status_source'], 'exported_due_status')
+        self.assertIn('records', data['page'])
+        status, headers, body = self.request('/api/due-swaps/export?country=Rwanda')
+        self.assertEqual(status, 200)
+        self.assertIn('attachment', headers['Content-Disposition'])
+        self.assertIn('repayment_status', body.decode('utf-8-sig'))
+        for query in ('country=Uganda', 'status=matched', 'start=bad', 'limit=101', 'country=Kenya&country=Rwanda', 'group=unknown'):
+            with self.subTest(query=query):
+                self.assertEqual(self.request('/api/due-swaps?' + query)[0], 400)
+
+    def test_offer_swap_routes_export_and_invalid_filters(self):
+        status, _, body = self.request('/api/offer-swaps?country=Kenya&group=wallet_attached&limit=1')
+        self.assertEqual(status, 200)
+        data = json.loads(body)
+        self.assertEqual(data['summary']['wallet_attached_count'], 1)
+        self.assertEqual(data['summary']['resolved_count'], 0)
+        self.assertEqual(data['page']['records'][0]['resolution_status'], 'wallet_attached')
+        status, headers, body = self.request('/api/offer-swaps/export?country=Kenya&group=all')
+        self.assertEqual(status, 200)
+        self.assertIn('attachment', headers['Content-Disposition'])
+        rows = list(csv.DictReader(io.StringIO(body.decode('utf-8-sig'))))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['offer_result'], 'no_consumption')
+        for query in ('country=Uganda','status=matched','start=bad','limit=101','group=unknown','group=all&group=resolved'):
+            with self.subTest(query=query):
+                self.assertEqual(self.request('/api/offer-swaps?' + query)[0], 400)
 
 
 if __name__=='__main__':unittest.main()

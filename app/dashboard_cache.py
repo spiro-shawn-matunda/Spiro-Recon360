@@ -17,7 +17,9 @@ def install_cache(conn):
         ('wallet_without_swap', 'dashboard_wallet_gaps', 'wallet_record_id'),
         ('swap_without_wallet', 'dashboard_swap_gaps', 'swap_record_id'),
     ):
-        statement, _ = report_query(group, ReconciliationFilter(), order=None)
+        # Cache the full source gap. Paid Due resolutions are checked live so
+        # status edits reopen cases without rebuilding the large wallet cache.
+        statement, _ = report_query(group, ReconciliationFilter(), order=None, include_resolved=True)
         conn.execute(sql.SQL('CREATE MATERIALIZED VIEW IF NOT EXISTS {} AS {} WITH NO DATA').format(
             sql.Identifier('reconciliation', view), sql.SQL(statement)))
         conn.execute(sql.SQL('CREATE UNIQUE INDEX IF NOT EXISTS {} ON {} ({})').format(

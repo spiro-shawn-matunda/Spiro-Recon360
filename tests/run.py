@@ -26,7 +26,7 @@ def main():
             )""").fetchone()[0]
             if occupied:
                 raise SystemExit('Refusing to initialize a database with user tables/views. Create a new empty test database.')
-            for name in ('schema.sql', 'wallets.sql', 'reconciliation.sql', 'tracking_indexes.sql'):
+            for name in ('schema.sql', 'wallets.sql', 'dues.sql', 'offers.sql', 'reconciliation.sql', 'tracking_indexes.sql'):
                 conn.execute((PROJECT / 'sql' / name).read_text(encoding='utf-8'))
             load_fixtures(conn)
             install_cache(conn)

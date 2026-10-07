@@ -6,12 +6,41 @@ from .missing_counterparts import report_query, csv_value
 from .reconciliation_backend import ReconciliationFilter, serialize
 
 GROUPS = {
+    'open_swaps': ('swap_without_wallet', None),
     'wallet_without_swap': ('wallet_without_swap', 'valid'),
     'swap_without_wallet': ('swap_without_wallet', 'valid'),
     'unmatchable_swaps': ('swap_without_wallet', 'unmatchable'),
     'unmatchable_wallets': ('wallet_without_swap', 'unmatchable'),
 }
 MAX_EXPORT = 10000
+
+
+def resolution_query():
+    from .due_tracking import paid_resolution_query
+    from .offer_tracking import resolution_query as offer_resolution_query
+    return ("SELECT record_id,country,'paid_due'::text AS reason FROM (" + paid_resolution_query()
+            + ") p UNION ALL SELECT record_id,country,'offer'::text AS reason FROM ("
+            + offer_resolution_query() + ') o')
+
+
+def swap_review_summary(conn, filters=None, *, cached=False):
+    """Shared live resolution rules keep both counts and exports consistent."""
+    filters = filters or ReconciliationFilter()
+    statement, values = report_query('swap_without_wallet', filters, order=None,
+                                    cached=cached, include_resolved=True)
+    rows = conn.execute('WITH resolutions AS MATERIALIZED (' + resolution_query()
+                        + '), gaps AS MATERIALIZED (' + statement + ''')
+        SELECT g.country, count(*) AS total_count,
+            count(*) FILTER (WHERE p.record_id IS NULL) AS open_count,
+            count(*) FILTER (WHERE p.reason='paid_due') AS resolved_paid_due_count,
+            count(*) FILTER (WHERE p.reason='offer') AS resolved_offer_count
+        FROM gaps g LEFT JOIN resolutions p ON p.country=g.country AND p.record_id=g.swap_record_id
+        GROUP BY g.country ORDER BY g.country''', values).fetchall()
+    by_country = [{'country': country or 'Unknown', 'total_count': total,
+                   'open_count': opened, 'resolved_paid_due_count': paid, 'resolved_offer_count': offered}
+                  for country, total, opened, paid, offered in rows]
+    return {'by_country': by_country, **{field: sum(row[field] for row in by_country)
+        for field in ('total_count', 'open_count', 'resolved_paid_due_count', 'resolved_offer_count')}}
 
 
 def selection(group):
@@ -31,7 +60,8 @@ def summary(conn, filters=None, *, cached=False):
             target['count'] += count
             country = country or 'Unknown'
             target['by_country'][country] = target['by_country'].get(country, 0) + count
-    return {'filters': filters.as_dict(), 'groups': groups, 'source_coverage_status': 'not_verified'}
+    return {'filters': filters.as_dict(), 'groups': groups, 'source_coverage_status': 'not_verified',
+            'swap_review': swap_review_summary(conn, filters, cached=cached)}
 
 
 def page(conn, group, filters=None, *, limit=50, cursor=None, cached=False):

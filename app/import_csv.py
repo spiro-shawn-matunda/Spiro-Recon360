@@ -41,9 +41,71 @@ MAPS = {
         ('currency', 'Currency', 'text'), ('category', 'Category', 'text'),
         ('opening_balance', 'Opening Balance', 'decimal'), ('hold_amount', 'Hold Amount', 'decimal'),
         ('available_balance', 'Available Balance', 'decimal'), ('created_on', 'Created On', 'timestamp'),
-        ('source_modified_at', 'Modified Time', 'timestamp'), ('source_change_at', 'Change Log Time', 'timestamp')]
+        ('source_modified_at', 'Modified Time', 'timestamp'), ('source_change_at', 'Change Log Time', 'timestamp')],
+    'due': [('zoho_record_id', 'Record Id', 'required'), ('due_reference', 'Due ID', 'text'),
+        ('transaction_id', 'Transaction ID', 'text'), ('country', 'Country', 'text'),
+        ('currency', 'Currency', 'text'), ('status', 'Status', 'text'),
+        ('customer_id', 'Customer.id', 'text'), ('customer_label', 'Customer', 'text'),
+        ('customer_name', 'Customer Name', 'text'), ('vehicle_registration', 'Vehicle Reg No', 'text'),
+        ('due_type', 'Due Type', 'text'), ('payment_mode', 'Payment Mode', 'text'),
+        ('due_amount', 'Due Amount', 'decimal'), ('original_due_amount', 'Original Due Amount', 'decimal'),
+        ('advance_applied_amount', 'Advance Applied Amount', 'decimal'),
+        ('swap_record_id', 'Swapping Transaction.id', 'text'), ('swap_reference', 'Swapping Transaction', 'text'),
+        ('due_source_id', 'Due Source ID', 'text'), ('payment_transaction_id', 'Payment Transaction.id', 'text'),
+        ('due_creation_date', 'Due Creation Date', 'date'), ('due_settlement_date', 'Due Settlement Date', 'date'),
+        ('created_on', 'Created On', 'timestamp'), ('source_modified_at', 'Last Modified On', 'timestamp'),
+        ('source_change_at', 'Change Log Time', 'timestamp')]
 }
-TABLES = {'wallet': 'wallet_transactions', 'swap': 'swap_transactions', 'wallet_master': 'wallets'}
+MAPS.update({
+    'offer_allocation': [
+        ('zoho_record_id', 'Record Id', 'required'),
+        ('allocation_reference', 'Offer Allocation ID', 'text'),
+        ('country', 'Country', 'text'),
+        ('customer_id', 'Customer Name.id', 'text'),
+        ('offer_id', 'Assigned Offer.id', 'text'),
+        ('offer_reference', 'Assigned Offer', 'text'),
+        ('offer_type', 'Offer Type', 'text'),
+        ('status', 'Assigned Offer Status', 'text'),
+        ('frequency', 'Frequency', 'text'),
+        ('allocation_date', 'Allocation Date', 'date'),
+        ('expiry_date', 'Expiry Date', 'date'),
+        ('valid_from', 'Allocated Offer Valid From', 'date'),
+        ('valid_till', 'Allocated Offer Valid Till', 'date'),
+        ('total_soc', 'Total Offer SOC', 'decimal'),
+        ('consumed_soc', 'Consumed Offer SOC', 'decimal'),
+        ('total_discount', 'Total Discount Price', 'decimal'),
+        ('consumed_discount', 'Consumed Discount Price', 'decimal'),
+        ('total_price', 'Total Offer Price', 'decimal'),
+        ('consumed_price', 'Consumed Offer Price', 'decimal'),
+        ('created_on', 'Created On', 'timestamp'),
+        ('source_modified_at', 'Last Modified On', 'timestamp'),
+        ('source_change_at', 'Change Log Time', 'timestamp'),
+    ],
+    'offer_consumption': [
+        ('zoho_record_id', 'Record Id', 'required'),
+        ('consumption_reference', 'Offer Consumption_ID', 'text'),
+        ('country', 'Country', 'text'),
+        ('currency', 'Currency', 'text'),
+        ('customer_business_id', 'Customer ID', 'text'),
+        ('allocation_reference', 'Offer Allocation ID', 'text'),
+        ('offer_name', 'Offer Name', 'text'),
+        ('transaction_type', 'Transaction Type', 'text'),
+        ('consumption_date', 'Offer Consumption Date', 'date'),
+        ('swap_record_id', 'Swap Transaction ID.id', 'text'),
+        ('swap_reference', 'Swap Transaction ID', 'text'),
+        ('allocated_soc', 'Allocated SOC', 'decimal'),
+        ('remaining_soc', 'Remaining SOC', 'decimal'),
+        ('consumed_soc', 'Consumed SOC', 'decimal'),
+        ('allocated_discount', 'Allocated Discount Price', 'decimal'),
+        ('remaining_discount', 'Remaining Discount Price', 'decimal'),
+        ('consumed_discount', 'Consumed Discount Price', 'decimal'),
+        ('created_on', 'Created On', 'timestamp'),
+        ('source_modified_at', 'Modified Time', 'timestamp'),
+        ('source_change_at', 'Change Log Time', 'timestamp'),
+    ],
+})
+TABLES = {'wallet': 'wallet_transactions', 'swap': 'swap_transactions', 'wallet_master': 'wallets', 'due': 'dues',
+          'offer_allocation': 'offer_allocations', 'offer_consumption': 'offer_consumptions'}
 
 def parse_value(value, kind, field):
     # Preserve nonblank identifiers exactly; never pass through a spreadsheet float.
@@ -91,7 +153,7 @@ def dry_run(path, dataset):
         if key in ids: duplicates += 1
         ids.add(key)
         tx = row.get('transaction_id')
-        if tx is None and dataset != 'wallet_master': missing_txids += 1
+        if tx is None and dataset in ('wallet', 'swap', 'due'): missing_txids += 1
         elif tx in txids: duplicate_txids += 1
         if tx is not None: txids.add(tx)
         statuses[row.get('status', row.get('category'))] += 1
@@ -99,7 +161,7 @@ def dry_run(path, dataset):
         if dt is not None:
             minimum = dt if minimum is None else min(minimum, dt)
             maximum = dt if maximum is None else max(maximum, dt)
-        amount_field = {'wallet': 'amount', 'swap': 'swap_amount', 'wallet_master': 'available_balance'}[dataset]
+        amount_field = {'wallet': 'amount', 'swap': 'swap_amount', 'wallet_master': 'available_balance', 'due': 'due_amount', 'offer_allocation': 'total_soc', 'offer_consumption': 'consumed_soc'}[dataset]
         amount = row[amount_field]
         if amount is not None: amount_total += amount
     print(json.dumps({'dataset': dataset, 'file': path.name, 'rows': n,
@@ -120,7 +182,7 @@ def import_file(conn, path, dataset, sql, *, progress=None):
     with conn.transaction():
         with conn.cursor() as cur:
             # Serialize imports of the same dataset; concurrent wallet/swap imports are allowed.
-            cur.execute('SELECT pg_advisory_xact_lock(%s)', ({'wallet':18701, 'swap':18702, 'wallet_master':18703}[dataset],))
+            cur.execute('SELECT pg_advisory_xact_lock(%s)', ({'wallet':18701, 'swap':18702, 'wallet_master':18703, 'due':18704, 'offer_allocation':18705, 'offer_consumption':18706}[dataset],))
             cur.execute(sql.SQL('CREATE TEMP TABLE import_stage (LIKE {} INCLUDING DEFAULTS) ON COMMIT DROP').format(table))
             n = 0; minimum = maximum = None
             with cur.copy(sql.SQL('COPY import_stage ({}) FROM STDIN').format(identifiers)) as copy:
@@ -166,10 +228,13 @@ def main():
     parser.add_argument('--wallet', type=Path, action='append', default=[], help='Wallet CSV; repeat for more batches')
     parser.add_argument('--swap', type=Path, action='append', default=[], help='Swap CSV; repeat for more batches')
     parser.add_argument('--wallet-master', type=Path, action='append', default=[], help='Wallets module CSV with customer mappings')
+    parser.add_argument('--due', type=Path, action='append', default=[], help='Dues module CSV with swap lookups and settlement status')
+    parser.add_argument('--offer-allocation', type=Path, action='append', default=[], help='Offer Allocation CSV')
+    parser.add_argument('--offer-consumption', type=Path, action='append', default=[], help='Offer Consumptions CSV')
     parser.add_argument('--dry-run', action='store_true', help='Validate files without connecting or writing to PostgreSQL')
     args = parser.parse_args()
-    files = [('wallet_master', p) for p in args.wallet_master] + [('wallet', p) for p in args.wallet] + [('swap', p) for p in args.swap]
-    if not files: parser.error('Provide --wallet, --swap, or --wallet-master files')
+    files = [('wallet_master', p) for p in args.wallet_master] + [('wallet', p) for p in args.wallet] + [('swap', p) for p in args.swap] + [('due', p) for p in args.due] + [('offer_allocation', p) for p in args.offer_allocation] + [('offer_consumption', p) for p in args.offer_consumption]
+    if not files: parser.error('Provide wallet, swap, due or offer CSV files')
     for _, p in files:
         if not p.is_file(): parser.error(f'File not found: {p}')
     if args.dry_run:

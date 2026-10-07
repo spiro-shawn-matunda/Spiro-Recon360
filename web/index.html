@@ -2,23 +2,35 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Spiro | Reconciliation</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script>
+  <title>Spiro | Home</title><link rel="icon" href="/favicon.svg"><link rel="stylesheet" href="/styles.css"><script src="/app.js" defer></script>
 </head>
 <body>
   <aside class="sidebar">
-    <a class="brand" href="/"><span class="brand-mark">S</span><span>SPIRO<span class="brand-sub">OPERATIONS</span></span></a>
-    <div class="nav-label">WORKSPACE</div><a class="nav-item active" href="/">▤ <span>Reconciliation</span></a>
+    <a class="brand" href="/" aria-label="Spiro Home"><span class="brand-mark">S</span><span>SPIRO<span class="brand-sub">OPERATIONS</span></span></a>
+    <nav class="sidebar-nav" aria-label="Workspace navigation">
+      <div class="nav-label">WORKSPACE</div>
+      <button type="button" class="nav-item active" id="view-home" aria-pressed="true" aria-current="page"><span class="nav-icon" aria-hidden="true">⌂</span><span>Home</span></button>
+      <details class="nav-group" id="swap-navigation">
+        <summary class="nav-item nav-category"><span class="nav-icon" aria-hidden="true">⇄</span><span>Swap</span><span class="nav-chevron" aria-hidden="true">›</span></summary>
+        <div class="nav-children">
+        <button type="button" class="nav-item" id="view-overview" aria-pressed="false"><span class="nav-icon" aria-hidden="true">▤</span><span>Wallet &amp; Swap</span></button>
+        <button type="button" class="nav-item" id="view-counterparts" aria-pressed="false"><span class="nav-icon" aria-hidden="true">⇄</span><span>Missing Counterparts</span></button>
+        <button type="button" class="nav-item" id="view-due" aria-pressed="false"><span class="nav-icon" aria-hidden="true">◷</span><span>Swap to Due</span></button>
+        <button type="button" class="nav-item" id="view-offer" aria-pressed="false"><span class="nav-icon" aria-hidden="true">◇</span><span>Swap to Offer</span></button>
+        </div>
+      </details>
+    </nav>
     <div class="sidebar-bottom"><span class="status-dot"></span> Local workspace<span class="sidebar-note">Kenya & Rwanda</span></div>
   </aside>
   <main>
-    <header class="page-header"><div><div class="eyebrow">FINANCE OPERATIONS / RECONCILIATION</div><h1>Wallet &amp; swap reconciliation</h1><p>Track wallet deductions and investigate transactions that need attention.</p></div><span class="workspace-tag">Spiro operations</span></header>
-    <div class="source-note"><span class="note-icon">i</span><div><strong>Source coverage needs verification</strong><span>Results reflect loaded Zoho exports. Review candidates require investigation.</span></div><span id="updated" class="updated">Connecting…</span></div>
+    <header class="page-header"><div><div class="eyebrow" id="page-eyebrow">SPIRO OPERATIONS / WORKSPACE</div><h1 id="page-title">Home</h1><p id="page-description">Your shared workspace for dashboards and operational reviews.</p></div><span class="workspace-tag">Spiro operations</span></header>
+    <div class="source-note" id="source-note" hidden><span class="note-icon">i</span><div><strong>Source coverage needs verification</strong><span>Results reflect loaded Zoho exports. Review candidates require investigation.</span></div><span id="updated" class="updated">Connecting…</span></div>
     <details class="import-panel" id="import-panel">
       <summary><span class="import-icon">＋</span><span><strong>Add files &amp; manage data</strong><span class="import-summary">Upload Zoho exports and refresh this dashboard</span></span><span class="import-open">Open ↓</span></summary>
       <div class="import-body">
         <div class="section-heading"><h2>Loaded data</h2><button type="button" class="reset" id="refresh-sources">Refresh</button></div>
         <div id="source-inventory" class="source-inventory">Loading data sources…</div>
-        <div class="upload-area"><div><h2>Add Zoho exports</h2><p>Choose Wallets, Wallet Transactions or Swapping Transactions CSV files for Kenya or Rwanda. The module is detected from the original column headers.</p></div>
+        <div class="upload-area"><div><h2>Add Zoho exports</h2><p>Choose Wallets, Wallet Transactions, Swapping Transactions, Dues, Offer Allocation or Offer Consumptions CSV files for Kenya or Rwanda. The module is detected from the original column headers.</p></div>
           <label for="upload-files" class="file-label">CSV files <span>Up to 10 files, 512 MB each</span></label><input id="upload-files" type="file" accept=".csv,text/csv" multiple>
           <p class="upload-hint">For exports over 200,000 rows, use date batches. Overlapping files are merged by Record Id. No balance or refund action is performed.</p>
           <div class="upload-actions"><button type="button" class="button secondary" id="validate-files" disabled>Validate files</button><button type="button" class="button primary" id="import-files" disabled>Import validated files ↗</button><button type="button" class="reset" id="clear-files" disabled>Clear</button></div>
@@ -27,8 +39,8 @@
         <details class="import-history"><summary>Recent imports</summary><div id="import-history">No imports yet.</div></details>
       </div>
     </details>
-    <nav class="view-tabs" aria-label="Dashboard views"><button type="button" id="view-overview" aria-pressed="true">Reconciliation overview</button><button type="button" id="view-counterparts" aria-pressed="false">Missing counterparts</button><button type="button" id="refresh-results" class="reset">↻ Refresh results</button></nav>
-    <form id="filters" class="filter-bar">
+    <div class="results-toolbar" id="results-toolbar" hidden><span id="module-context">Swap</span><button type="button" id="refresh-results" class="reset">↻ Refresh results</button></div>
+    <form id="filters" class="filter-bar" hidden>
       <label>COUNTRY<select id="country"><option value="">All countries</option><option>Kenya</option><option>Rwanda</option></select></label>
       <label>FROM<input id="start" type="date" aria-label="From date"></label>
       <label>THROUGH<input id="end" type="date" aria-label="Through date"></label>
@@ -36,13 +48,25 @@
       <button type="submit" class="button primary" id="apply">Apply filters <span>↗</span></button><button type="button" class="reset" id="reset">Reset</button>
     </form>
     <div id="error" class="error-banner" role="alert" hidden></div>
-    <div id="overview-content">
+    <section id="home-content" class="home-content" aria-label="Available modules">
+      <div class="home-intro"><div><div class="eyebrow">YOUR WORKSPACE</div><h2>Operational modules</h2><p>Choose a module to view results, investigate records or export a review list.</p></div><span class="home-scope">Kenya &amp; Rwanda</span></div>
+      <div class="section-heading"><h2>Swap</h2><span>Wallets, swaps, dues &amp; offers</span></div>
+      <div class="module-grid">
+        <button type="button" class="module-card" data-open-view="overview"><span class="module-icon" aria-hidden="true">▤</span><span class="module-card-title">Wallet &amp; Swap <span aria-hidden="true">↗</span></span><span class="module-description">Compare wallet deductions with swaps and review matching, amounts and customer details.</span><span class="module-link">Open reconciliation</span></button>
+        <button type="button" class="module-card" data-open-view="counterparts"><span class="module-icon" aria-hidden="true">⇄</span><span class="module-card-title">Missing Counterparts <span aria-hidden="true">↗</span></span><span class="module-description">Track wallet deductions without swaps and swaps still needing a payment explanation.</span><span class="module-link">Review missing records</span></button>
+        <button type="button" class="module-card" data-open-view="due"><span class="module-icon" aria-hidden="true">◷</span><span class="module-card-title">Swap to Due <span aria-hidden="true">↗</span></span><span class="module-description">Follow due-created swaps, inspect repayment status and see cases cleared by Paid Dues.</span><span class="module-link">Review due coverage</span></button>
+        <button type="button" class="module-card" data-open-view="offer"><span class="module-icon" aria-hidden="true">◇</span><span class="module-card-title">Swap to Offer <span aria-hidden="true">↗</span></span><span class="module-description">Check offer consumption and allocation evidence, voucher coverage and unresolved cases.</span><span class="module-link">Review offer coverage</span></button>
+      </div>
+    </section>
+    <div id="overview-content" hidden>
     <section class="metrics" aria-label="Reconciliation summary">
       <article class="metric"><div class="metric-top">FILTERED DEDUCTIONS <span>↗</span></div><strong id="total">—</strong><div>Committed wallet debits for swaps</div></article>
       <article class="metric"><div class="metric-top">MATCHED <span class="green">✓</span></div><strong id="matched">—</strong><div>Successful swap with equal amount</div></article>
-      <article class="metric attention"><div class="metric-top">NEED REVIEW <span>!</span></div><strong id="review">—</strong><div>Unmatched deductions and other flags</div></article>
+      <article class="metric attention"><div class="metric-top">WALLET REVIEW <span>!</span></div><strong id="review">—</strong><div>Unmatched deductions and other flags</div></article>
       <article class="metric"><div class="metric-top">NO LOADED SWAP <span>⇄</span></div><strong id="unmatched">—</strong><div>A corresponding swap is not loaded</div></article>
     </section>
+    <p class="gap-footnote">The four cards count wallet deductions. Swap cases without wallet deductions are tracked below; verified Paid Dues and full offer coverage clear those swap cases.</p>
+    <section class="identifier-note" aria-label="Swap review after Due and offer matching"><div><strong>Swaps without wallet deductions</strong><p>Need review: <b id="swap-review-open">—</b> · Cleared by Paid Dues: <b id="swap-review-resolved">—</b> · Cleared by offers: <b id="swap-review-offers">—</b></p><p id="swap-review-countries">Loading swap review…</p><p>Country and date filters apply. Paid Dues must match the swap. Offer resolutions require full SOC coverage and consistent customer, currency, balance and validity evidence.</p></div><div class="identifier-actions"><button type="button" id="overview-open-swaps">Review open swaps ↗</button><button type="button" id="overview-paid-dues">View Paid Due resolutions ↗</button><button type="button" id="overview-offers">View offer resolutions ↗</button></div></section>
     <section class="country-section"><div class="section-heading"><h2>Country overview</h2><span>Counts remain separate by country</span></div><div id="countries" class="country-grid"><div class="country-placeholder">Loading country results…</div></div></section>
     <section class="table-section">
       <div class="table-heading"><div><h2>Transaction review <span id="case-count" class="count-pill">—</span></h2><p id="table-caption">Customer details and reconciliation reasons for each deduction.</p></div><div class="table-tools"><label class="toggle-label"><input type="checkbox" id="review-only" checked><span>Review candidates only</span></label><button class="button secondary" id="export" type="button">↓ Export candidates</button></div></div>
@@ -54,15 +78,49 @@
       <div class="section-heading gap-heading"><div><h2>Missing counterparts</h2><p>Match by country and nonblank Transaction ID across all loaded data.</p></div></div>
       <div class="gap-cards">
         <button type="button" class="gap-card selected" id="group-wallet_without_swap" aria-pressed="true"><span class="gap-label">WALLET DEDUCTIONS WITHOUT SWAPS</span><strong id="count-wallet_without_swap">—</strong><span>Committed swap debits with no corresponding loaded swap</span><span id="countries-wallet_without_swap" class="gap-country-counts">Loading…</span></button>
-        <button type="button" class="gap-card" id="group-swap_without_wallet" aria-pressed="false"><span class="gap-label">SWAPS WITHOUT WALLET DEDUCTIONS</span><strong id="count-swap_without_wallet">—</strong><span>Identifiable swaps with no committed swap debit loaded</span><span id="countries-swap_without_wallet" class="gap-country-counts">Loading…</span></button>
+        <button type="button" class="gap-card" id="group-open_swaps" aria-pressed="false"><span class="gap-label">SWAPS NEEDING REVIEW</span><strong id="count-open_swaps">—</strong><span>No wallet deduction, verified Paid Due or full offer coverage</span><span id="countries-open_swaps" class="gap-country-counts">Loading…</span></button>
       </div>
-      <section class="identifier-note" aria-label="Missing identifiers"><div><strong>Records that cannot be matched</strong><p>Blank Transaction IDs or countries prevent matching. These records do not confirm a missing payment. Non-wallet swaps may legitimately have no wallet deduction.</p></div><div class="identifier-actions"><button type="button" id="group-unmatchable_swaps" aria-pressed="false">Unmatchable swaps <b id="count-unmatchable_swaps">—</b></button><button type="button" id="group-unmatchable_wallets" aria-pressed="false">Unmatchable deductions <b id="count-unmatchable_wallets">—</b></button></div></section>
+      <section class="identifier-note" aria-label="Missing identifiers"><div><strong>Records that cannot be matched</strong><p>Verified Paid Dues and full SOC offer coverage clear swaps even when their Transaction ID is blank. Pending, Closed, missing links and conflicting records remain open. Other payment methods may legitimately have no wallet deduction.</p></div><div class="identifier-actions"><button type="button" id="group-swap_without_wallet" aria-pressed="false">Identifiable swaps without wallet <b id="count-swap_without_wallet">—</b></button><button type="button" id="group-unmatchable_swaps" aria-pressed="false">Unmatchable swaps <b id="count-unmatchable_swaps">—</b></button><button type="button" id="group-unmatchable_wallets" aria-pressed="false">Unmatchable deductions <b id="count-unmatchable_wallets">—</b></button></div></section>
       <section class="table-section">
-        <div class="table-heading"><div><h2 id="gap-table-title">Wallet deductions without swaps</h2><p id="gap-caption">Loading current results…</p></div><div class="gap-tools"><label for="gap-group" class="sr-only">Tracking group</label><select id="gap-group"><option value="wallet_without_swap">Wallet deductions without swaps</option><option value="swap_without_wallet">Swaps without wallet deductions</option><option value="unmatchable_swaps">Unmatchable swaps</option><option value="unmatchable_wallets">Unmatchable deductions</option></select><button type="button" id="gap-export" class="button secondary">↓ Export group</button></div></div>
+        <div class="table-heading"><div><h2 id="gap-table-title">Wallet deductions without swaps</h2><p id="gap-caption">Loading current results…</p></div><div class="gap-tools"><label for="gap-group" class="sr-only">Tracking group</label><select id="gap-group"><option value="open_swaps">All open swaps</option><option value="wallet_without_swap">Wallet deductions without swaps</option><option value="swap_without_wallet">Swaps without wallet deductions</option><option value="unmatchable_swaps">Unmatchable swaps</option><option value="unmatchable_wallets">Unmatchable deductions</option></select><button type="button" id="gap-export" class="button secondary">↓ Export group</button></div></div>
         <div class="table-scroll"><table><thead><tr><th>CUSTOMER</th><th>COUNTRY</th><th>SOURCE REFERENCE</th><th class="amount-column">AMOUNT</th><th>REASON</th><th>PAYMENT / STATUS</th><th>CREATED ON</th><th><span class="sr-only">Details</span></th></tr></thead><tbody id="gap-rows"><tr><td colspan="8" class="empty-state">Loading transactions…</td></tr></tbody></table></div>
         <div class="pagination"><span id="gap-page-info">—</span><div><button id="gap-previous" class="page-button" disabled>← Previous</button><button id="gap-next" class="page-button" disabled>Next →</button></div></div>
       </section>
       <p class="gap-footnote">Date filters select each source record by its creation date. Counterparts are searched across all loaded dates. Counts refresh after imports; use Refresh results to check again.</p>
+    </div>
+    <div id="due-content" hidden>
+      <div class="section-heading gap-heading"><div><h2>Swap to Due</h2><p>Swaps marked DUE_CREATED in the loaded Swapping Transactions exports.</p></div></div>
+      <section class="metrics" aria-label="Due-created swap summary">
+        <article class="metric"><div class="metric-top">DUE-CREATED SWAPS <span>↗</span></div><strong id="due-total">—</strong><div>All loaded statuses in this payment category</div></article>
+        <article class="metric"><div class="metric-top">PAID DUES CLEARED <span class="green">✓</span></div><strong id="due-matched">—</strong><div>Paid Due matches that clear swaps without wallet debits</div></article>
+        <article class="metric attention"><div class="metric-top">NEED REVIEW <span>!</span></div><strong id="due-review">—</strong><div>Swaps without wallet debits that are not cleared by Paid Dues</div></article>
+        <article class="metric"><div class="metric-top">PENDING LINKED DUES <span>↗</span></div><strong id="due-pending">—</strong><div>Linked Dues marked Pending in the export</div></article>
+      </section>
+      <section class="country-section"><div class="section-heading"><h2>Swap amounts by country &amp; currency</h2><span>Amounts as recorded on swaps</span></div><div id="due-countries" class="country-grid"></div></section>
+      <div class="identifier-note"><div><strong>Match using the Due’s swap lookup</strong><p>Country and Swapping Transaction.id identify the link. Unmatched means no corresponding loaded Due. Paid, Pending and Closed are exported statuses; Closed does not establish repayment. Dues without a swap lookup cannot be auto-matched. An exact matching Paid Due clears the swap review; Pending and Closed do not.</p><p id="due-coverage"></p></div></div>
+      <section class="table-section">
+        <div class="table-heading"><div><h2>Due-created swaps <span id="due-case-count" class="count-pill">—</span></h2><p id="due-caption">Review unmatched swaps, matched Due records and exported payment statuses.</p></div><div class="gap-tools"><label for="due-group" class="sr-only">Due result group</label><select id="due-group"><option value="needs_review">Needs review</option><option value="no_due">No loaded Due</option><option value="resolved">Cleared by Paid Dues</option><option value="matched">Matched Due records</option><option value="pending">Pending Dues</option><option value="paid">Paid Dues</option><option value="closed">Closed Dues</option><option value="awaiting_due_export">Awaiting Due export</option><option value="all">All due-created swaps</option></select><button type="button" id="due-export" class="button secondary">↓ Export group</button></div></div>
+        <div class="table-scroll"><table><thead><tr><th>CUSTOMER</th><th>COUNTRY</th><th>SWAP REFERENCE</th><th class="amount-column">SWAP AMOUNT</th><th>DUE REFERENCE</th><th>MATCH RESULT</th><th>DUE STATUS</th><th>SWAP CREATED ON</th><th><span class="sr-only">Details</span></th></tr></thead><tbody id="due-rows"><tr><td colspan="9" class="empty-state">Loading due-created swaps…</td></tr></tbody></table></div>
+        <div class="pagination"><span id="due-page-info">—</span><div><button id="due-previous" class="page-button" disabled>← Previous</button><button id="due-next" class="page-button" disabled>Next →</button></div></div>
+      </section>
+      <p class="gap-footnote">Date filters select swaps; Dues are matched across all loaded dates. Swap currency comes from the current wallet snapshot; Due currency and status come from the Due export. New swap or Due uploads refresh this view.</p>
+    </div>
+    <div id="offer-content" hidden>
+      <div class="section-heading gap-heading"><div><h2>Swap to Offer</h2><p>Review voucher coverage for swaps marked OFFER_APPLIED.</p></div></div>
+      <section class="metrics" aria-label="Offer swap summary">
+        <article class="metric"><div class="metric-top">OFFER SWAPS <span>↗</span></div><strong id="offer-total">—</strong><div>All loaded swaps with an offer applied</div></article>
+        <article class="metric"><div class="metric-top">CLEARED BY OFFERS <span class="green">✓</span></div><strong id="offer-resolved">—</strong><div>Full SOC coverage with no wallet debit attached</div></article>
+        <article class="metric attention"><div class="metric-top">NEED REVIEW <span>!</span></div><strong id="offer-review">—</strong><div>Missing, conflicting or incomplete offer evidence</div></article>
+        <article class="metric"><div class="metric-top">WALLET ATTACHED <span>⇄</span></div><strong id="offer-wallet">—</strong><div>These swaps already have a wallet deduction</div></article>
+      </section>
+      <section class="country-section"><div class="section-heading"><h2>Offer coverage by country</h2><span>Counts use the selected swap dates</span></div><div id="offer-countries" class="country-grid"></div></section>
+      <div class="identifier-note"><div><strong>Evidence for each resolution</strong><p>A single consumption must link to the swap and a unique allocation for the same country and customer. Full SOC coverage requires no billable SOC or swap charge, sufficient voucher balance and consistent dates. Discounts, repeated allocations, duplicate links and conflicting expiry dates stay in review.</p><p id="offer-sources"></p><p id="offer-reasons"></p></div></div>
+      <section class="table-section">
+        <div class="table-heading"><div><h2>Offer swaps <span id="offer-case-count" class="count-pill">—</span></h2><p id="offer-caption">Review offer consumption and allocation evidence.</p></div><div class="gap-tools"><label for="offer-group" class="sr-only">Offer result group</label><select id="offer-group"><option value="needs_review">Needs review</option><option value="resolved">Cleared by offers</option><option value="wallet_attached">Wallet attached</option><option value="all">All offer swaps</option></select><button type="button" id="offer-export" class="button secondary">↓ Export group</button></div></div>
+        <div class="table-scroll"><table><thead><tr><th>CUSTOMER</th><th>COUNTRY</th><th>SWAP REFERENCE</th><th>ALLOCATION</th><th>SOC USED / NET</th><th>RESULT</th><th>SWAP CREATED ON</th><th><span class="sr-only">Details</span></th></tr></thead><tbody id="offer-rows"><tr><td colspan="8" class="empty-state">Loading offer swaps…</td></tr></tbody></table></div>
+        <div class="pagination"><span id="offer-page-info">—</span><div><button id="offer-previous" class="page-button" disabled>← Previous</button><button id="offer-next" class="page-button" disabled>Next →</button></div></div>
+      </section>
+      <p class="gap-footnote">Date filters select swaps; matching checks all loaded offer records. Expired today does not invalidate earlier use within verified dates. Results reflect loaded exports, not a complete offer audit.</p>
     </div>
     <footer>Times are shown as exported by Zoho. Currency and customer details come from the current wallet snapshot. Add new exports under “Add files &amp; manage data”.</footer>
   </main>

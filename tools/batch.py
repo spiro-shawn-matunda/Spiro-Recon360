@@ -12,7 +12,7 @@ PROJECT=PROJECT_ROOT
 def read_config():
     config = json.loads((PROJECT / "config.json").read_text(encoding="utf-8"))
     files = []
-    for dataset, key in (("wallet_master", "wallet_master_files"), ("wallet", "wallet_files"), ("swap", "swap_files")):
+    for dataset, key in (("wallet_master", "wallet_master_files"), ("wallet", "wallet_files"), ("swap", "swap_files"), ("due", "due_files"), ("offer_allocation", "offer_allocation_files"), ("offer_consumption", "offer_consumption_files")):
         for item in config.get(key, []):
             path = Path(item)
             if not path.is_absolute():
@@ -21,7 +21,7 @@ def read_config():
                 raise ValueError(f"CSV not found: {path}. Update config.json or copy the file into data/.")
             files.append((dataset, path))
     if not files:
-        raise ValueError("Add wallet_master_files, wallet_files, or swap_files to config.json.")
+        raise ValueError("Add wallet_master_files, wallet_files, swap_files or due_files to config.json.")
     return config, files
 
 
@@ -62,11 +62,13 @@ def run_import(argv=None):
         with conn.transaction():
             conn.execute((PROJECT / "sql" / "schema.sql").read_text(encoding="utf-8"))
             conn.execute((PROJECT / "sql" / "wallets.sql").read_text(encoding="utf-8"))
+            conn.execute((PROJECT / "sql" / "dues.sql").read_text(encoding="utf-8"))
+            conn.execute((PROJECT / "sql" / "offers.sql").read_text(encoding="utf-8"))
             conn.execute((PROJECT / "sql" / "reconciliation.sql").read_text(encoding="utf-8"))
         print("Reconciliation tables are ready.", flush=True)
         for dataset, path in files:
             import_file(conn, path, dataset, sql)
-        for table in ("wallets", "wallet_transactions", "swap_transactions"):
+        for table in ("wallets", "wallet_transactions", "swap_transactions", "dues", "offer_allocations", "offer_consumptions"):
             conn.execute(sql.SQL("ANALYZE {}").format(sql.Identifier("reconciliation", table)))
         with conn.cursor() as cur:
             cur.execute("SELECT count(*) FROM reconciliation.wallets")

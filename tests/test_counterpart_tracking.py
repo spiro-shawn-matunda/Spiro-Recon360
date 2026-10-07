@@ -86,7 +86,7 @@ class CounterpartTrackingTests(unittest.TestCase):
         data=self.data()
         groups=data['summary']['groups']
         self.assertEqual({key:value['count'] for key,value in groups.items()},
-                         dict(wallet_without_swap=3,swap_without_wallet=3,unmatchable_swaps=3,unmatchable_wallets=3))
+                         dict(open_swaps=6,wallet_without_swap=3,swap_without_wallet=3,unmatchable_swaps=3,unmatchable_wallets=3))
         self.assertEqual(groups['swap_without_wallet']['by_country'],{'Kenya':2,'Rwanda':1})
         self.assertEqual(groups['unmatchable_swaps']['by_country'],{'Kenya':2,'Unknown':1})
         self.assertEqual({r['record_id'] for r in data['page']['records']},{'ct-a','ct-b','ct-c'})

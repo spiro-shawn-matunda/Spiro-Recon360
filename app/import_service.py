@@ -17,7 +17,8 @@ from .dashboard_cache import install_cache, refresh_cache
 from . import PROJECT_ROOT
 
 PROJECT = PROJECT_ROOT
-DATASETS = {'wallet_master': 'Wallets', 'wallet': 'Wallet transactions', 'swap': 'Swapping transactions'}
+DATASETS = {'wallet_master': 'Wallets', 'wallet': 'Wallet transactions', 'swap': 'Swapping transactions', 'due': 'Dues',
+            'offer_allocation': 'Offer allocations', 'offer_consumption': 'Offer consumptions'}
 MAX_UPLOAD_BYTES = 512 * 1024 * 1024
 MAX_JOBS = 30
 JOB_TTL = 60 * 60
@@ -28,7 +29,7 @@ def prepare_database(settings):
     with psycopg.connect(**settings, connect_timeout=15, autocommit=True) as conn:
         with conn.transaction():
             conn.execute('SELECT pg_advisory_xact_lock(18700)')
-            for name in ('schema.sql', 'wallets.sql', 'reconciliation.sql', 'tracking_indexes.sql'):
+            for name in ('schema.sql', 'wallets.sql', 'dues.sql', 'offers.sql', 'reconciliation.sql', 'tracking_indexes.sql'):
                 conn.execute((PROJECT / 'sql' / name).read_text(encoding='utf-8'))
             install_cache(conn)
         refresh_cache(conn)
@@ -49,7 +50,7 @@ def inspect_csv(path, progress=None):
     matches = [dataset for dataset, mapping in MAPS.items()
                if {field for _, field, _ in mapping} <= set(headers)]
     if len(matches) != 1:
-        raise ValueError('This is not a complete Wallets, Wallet Transactions or Swapping Transactions export. Keep the original Zoho column headers.')
+        raise ValueError('This is not a complete Wallets, Wallet Transactions, Swapping Transactions, Dues, Offer Allocation or Offer Consumptions export. Keep the original Zoho column headers.')
     dataset = matches[0]
     # A master export can contain Wallet Pin. Remove it from temporary storage too.
     if 'Wallet Pin' in headers:
@@ -67,7 +68,7 @@ def inspect_csv(path, progress=None):
             clean.replace(path)
         finally:
             clean.unlink(missing_ok=True)
-    count = duplicates = 0
+    count = duplicates = swap_lookups = 0
     ids = set()
     countries = Counter()
     statuses = Counter()
@@ -81,6 +82,8 @@ def inspect_csv(path, progress=None):
         duplicates += row['zoho_record_id'] in ids
         ids.add(row['zoho_record_id'])
         statuses[row.get('status') or row.get('category') or 'Unspecified'] += 1
+        if dataset in ('due', 'offer_consumption') and row.get('swap_record_id'):
+            swap_lookups += 1
         created = row['created_on']
         if created is not None:
             minimum = min(minimum, created) if minimum else created
@@ -89,12 +92,15 @@ def inspect_csv(path, progress=None):
             progress(count, 'validating')
     if not count:
         raise ValueError('This CSV has headers but no data records.')
-    return {'dataset': dataset, 'module': DATASETS[dataset], 'rows': count,
+    result = {'dataset': dataset, 'module': DATASETS[dataset], 'rows': count,
             'distinct_record_ids': len(ids), 'duplicate_record_id_rows': duplicates,
             'countries': dict(countries), 'statuses': dict(statuses),
             'min_created_on': minimum.isoformat() if minimum else None,
             'max_created_on': maximum.isoformat() if maximum else None,
             'export_cap_warning': count >= 200000}
+    if dataset in ('due', 'offer_consumption'):
+        result.update(swap_lookup_rows=swap_lookups, missing_swap_lookup_rows=count-swap_lookups)
+    return result
 
 
 def source_inventory(settings):

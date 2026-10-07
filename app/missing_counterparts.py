@@ -111,6 +111,8 @@ TRACKING_QUERIES = {
         FROM reconciliation.swap_transactions s WHERE NOT EXISTS (
             SELECT 1 FROM ({ELIGIBLE}) w
             WHERE w.country=s.country AND w.transaction_id=s.transaction_id
+              AND nullif(btrim(s.transaction_id),'') IS NOT NULL
+              AND nullif(btrim(s.country),'') IS NOT NULL
         ) {{filters}}""",
 }
 UNMATCHABLE_QUERIES = {
@@ -119,7 +121,7 @@ UNMATCHABLE_QUERIES = {
 }
 
 
-def report_query(group, filters, *, classification=None, cursor=None, order='country', detail=True, record_ids=None, cached=False):
+def report_query(group, filters, *, classification=None, cursor=None, order='country', detail=True, record_ids=None, cached=False, include_resolved=False):
     alias = 'w' if group == 'wallet_without_swap' else 's'
     record = ('wallet_record_id' if group == 'wallet_without_swap' else 'swap_record_id') if cached else 'zoho_record_id'
     clauses, values = [], []
@@ -146,6 +148,9 @@ def report_query(group, filters, *, classification=None, cursor=None, order='cou
         clauses.append(f'{alias}.{record} > %s'); values.append(cursor)
     if record_ids is not None:
         clauses.append(f'{alias}.{record} = ANY(%s)'); values.append(record_ids)
+    if group == 'swap_without_wallet' and not include_resolved:
+        clauses.append(f'NOT EXISTS (SELECT 1 FROM swap_resolutions p '
+                       f'WHERE p.country={alias}.country AND p.record_id={alias}.{record})')
     suffix = ' AND ' + ' AND '.join(clauses) if clauses else ''
     if cached:
         view = 'dashboard_wallet_gaps' if group == 'wallet_without_swap' else 'dashboard_swap_gaps'
@@ -153,7 +158,7 @@ def report_query(group, filters, *, classification=None, cursor=None, order='cou
         statement = f'SELECT {fields} FROM reconciliation.{view} {alias} WHERE true{suffix}'
     elif detail:
         statement = QUERIES[group].format(filters=suffix)
-    elif classification == 'valid':
+    elif classification in ('valid', None):
         statement = TRACKING_QUERIES[group].format(filters=suffix)
     elif classification == 'unmatchable':
         statement = UNMATCHABLE_QUERIES[group].format(filters=suffix)
@@ -165,6 +170,11 @@ def report_query(group, filters, *, classification=None, cursor=None, order='cou
         statement += f' ORDER BY {alias}.{record}'
     elif order is not None:
         raise ValueError('Unknown report ordering.')
+    if group == 'swap_without_wallet' and not include_resolved:
+        # Import lazily: Due tracking also uses this module's CSV escaping.
+        from .counterpart_tracking import resolution_query
+        statement = ('WITH swap_resolutions AS MATERIALIZED (' + resolution_query()
+                     + ') SELECT * FROM (' + statement + ') open_swaps')
     return statement, values
 
 
@@ -188,7 +198,7 @@ def write_missing_reports(conn, output=None, filters=None):
               'filters': filters.as_dict(), 'source_coverage_status': 'not_verified',
               'matching_rule': 'Exact country and nonblank Transaction ID; one row per source Record Id.',
               'wallet_scope': 'Committed Debit wallet transactions settled against Swap.',
-              'swap_scope': 'All loaded swaps, including unsuccessful and non-wallet payment methods.',
+              'swap_scope': 'Swaps without wallet deductions, excluding verified Paid Dues and full SOC offer coverage.',
               'date_filter_rule': 'Filters select each group by its own creation time; counterparts are searched across all loaded dates.',
               'note': 'These are missing from loaded exports, not proof of absence in Zoho. Missing identifiers are separately labelled; non-wallet swaps may legitimately have no wallet debit.',
               'groups': {}}

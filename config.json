@@ -10,5 +10,15 @@
   "swap_files": [
     "data/Kenya_Swapping_Transactions_2026_10_05.csv",
     "data/Rwanda_Swapping_Transactions_2026_10_05.csv"
+  ],
+  "due_files": [
+    "data/Kenya_Dues_2026_10_06.csv",
+    "data/Rwanda_Dues_2026_10_06.csv"
+  ],
+  "offer_allocation_files": [
+    "data/Kenya_Offer_Allocation_2026_10_07.csv"
+  ],
+  "offer_consumption_files": [
+    "data/Kenya_Offer_Consumptions_2026_10_07.csv"
   ]
 }

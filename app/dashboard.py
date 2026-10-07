@@ -17,7 +17,7 @@ from .db_config import read_database_config
 from .reconcile import EXPORT_FIELDS
 from .reconciliation_backend import ReconciliationBackend, ReconciliationFilter
 from .import_service import ImportJobs, MAX_UPLOAD_BYTES, source_inventory
-from . import counterpart_tracking
+from . import counterpart_tracking, due_tracking, offer_tracking
 from .dashboard_cache import cache_ready, ensure_cache
 
 from . import PROJECT_ROOT
@@ -155,6 +155,43 @@ class DashboardHandler(BaseHTTPRequestHandler):
             elif parsed.path.startswith('/api/import-jobs/'):
                 key = parsed.path.removeprefix('/api/import-jobs/')
                 self.json(200, self.server.imports.status(key))
+            elif parsed.path in ('/api/offer-swaps', '/api/offer-swaps/export'):
+                allowed = {'country', 'start', 'end', 'group'}
+                if not parsed.path.endswith('/export'):
+                    allowed |= {'limit', 'cursor'}
+                filters, _, limit, cursor, values = query_options(parsed.query, allowed)
+                group = values.get('group', 'needs_review')
+                offer_tracking.selection(group)
+                with snapshot(self.server.database_settings) as backend:
+                    if parsed.path.endswith('/export'):
+                        body = offer_tracking.export(backend.conn, filters, group=group)
+                    else:
+                        result = {'summary': offer_tracking.summary(backend.conn, filters),
+                                  'page': offer_tracking.page(backend.conn, filters, group=group, limit=limit, cursor=cursor),
+                                  'group': group, 'generated_at_utc': datetime.now(timezone.utc).isoformat()}
+                if parsed.path.endswith('/export'):
+                    self.respond(200, body, 'text/csv; charset=utf-8', filename='spiro_offer_swaps.csv')
+                else:
+                    self.json(200, result)
+            elif parsed.path in ('/api/due-swaps', '/api/due-swaps/export'):
+                allowed = {'country', 'start', 'end', 'group'}
+                if parsed.path == '/api/due-swaps':
+                    allowed |= {'limit', 'cursor'}
+                filters, _, limit, cursor, values = query_options(parsed.query, allowed)
+                group = values.get('group', 'needs_review')
+                due_tracking.selection(group)
+                with snapshot(self.server.database_settings) as backend:
+                    if parsed.path.endswith('/export'):
+                        body = due_tracking.export(backend.conn, filters, group=group)
+                    else:
+                        result = {'summary': due_tracking.summary(backend.conn, filters),
+                                  'page': due_tracking.page(backend.conn, filters, limit=limit, cursor=cursor, group=group),
+                                  'group': group,
+                                  'generated_at_utc': datetime.now(timezone.utc).isoformat()}
+                if parsed.path.endswith('/export'):
+                    self.respond(200, body, 'text/csv; charset=utf-8', filename='spiro_due_created_swaps.csv')
+                else:
+                    self.json(200, result)
             elif parsed.path in ('/api/counterparts', '/api/counterparts/export'):
                 allowed = {'country', 'start', 'end', 'group'}
                 if parsed.path == '/api/counterparts':
@@ -180,6 +217,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     result = {"page": page, "generated_at_utc": datetime.now(timezone.utc).isoformat()}
                     if parsed.path == "/api/dashboard":
                         result["summary"] = backend.summary(filters)
+                        swap_filters = ReconciliationFilter(country=filters.country,
+                            start_date=filters.start_date, end_date=filters.end_date)
+                        result['swap_review'] = counterpart_tracking.swap_review_summary(
+                            backend.conn, swap_filters, cached=backend.cached)
                 self.json(200, result)
             elif parsed.path == "/api/detail":
                 filters, _, _, _, values = query_options(parsed.query, {"country", "record_id"})

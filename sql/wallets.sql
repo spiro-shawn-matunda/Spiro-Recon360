@@ -27,7 +27,7 @@ ALTER TABLE reconciliation.import_batches
     DROP CONSTRAINT IF EXISTS import_batches_dataset_check;
 ALTER TABLE reconciliation.import_batches
     ADD CONSTRAINT import_batches_dataset_check
-    CHECK (dataset IN ('wallet', 'swap', 'wallet_master'));
+    CHECK (dataset IN ('wallet', 'swap', 'wallet_master', 'due', 'offer_allocation', 'offer_consumption'));
 
 CREATE INDEX IF NOT EXISTS wallets_customer_crm_id_idx
     ON reconciliation.wallets (customer_crm_id);

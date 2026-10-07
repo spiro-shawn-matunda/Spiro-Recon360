@@ -7,9 +7,16 @@
 <body>
   <aside class="sidebar">
     <a class="brand" href="/"><span class="brand-mark">S</span><span>SPIRO<span class="brand-sub">OPERATIONS</span></span></a>
-    <div class="nav-label">WORKSPACE</div><a class="nav-item active" href="/">▤ <span>Reconciliation</span></a>
+    <div class="nav-label">WORKSPACE</div>
+    <a class="nav-item active" href="/">▤ <span>Reconciliation</span></a>
+    <button id="payments-toggle" class="nav-item" style="background: none; border: none; cursor: pointer; width: 100%; text-align: left;">▤ <span>Payments</span></button>
+    <div id="payments-menu" class="payments-submenu open">
+      <a class="nav-item sub-item" href="/dashboard_ui/payments-wallet.html">◇ <span>Wallet</span></a>
+      <a class="nav-item sub-item" href="/dashboard_ui/payments-swap.html">◇ <span>Swap</span></a>
+    </div>
     <div class="sidebar-bottom"><span class="status-dot"></span> Local workspace<span class="sidebar-note">Kenya & Rwanda</span></div>
   </aside>
+
   <main>
     <header class="page-header"><div><div class="eyebrow">FINANCE OPERATIONS / RECONCILIATION</div><h1>Wallet &amp; swap reconciliation</h1><p>Track wallet deductions and investigate transactions that need attention.</p></div><span class="workspace-tag">Spiro operations</span></header>
     <div class="source-note"><span class="note-icon">i</span><div><strong>Source coverage needs verification</strong><span>Results reflect loaded Zoho exports. Review candidates require investigation.</span></div><span id="updated" class="updated">Connecting…</span></div>
@@ -50,5 +57,27 @@
     <footer>Times are shown as exported by Zoho. Currency and customer details come from the current wallet snapshot. Add new exports under “Add files &amp; manage data”.</footer>
   </main>
   <div id="drawer-overlay" class="drawer-overlay" hidden></div><aside id="drawer" class="drawer" role="dialog" aria-modal="true" aria-label="Transaction details" hidden><div class="drawer-header"><div class="eyebrow">TRANSACTION REVIEW</div><button id="close-drawer" aria-label="Close details">×</button></div><div id="drawer-content"></div></aside>
+  <script>
+    const paymentsToggle = document.getElementById('payments-toggle');
+    const paymentsMenu = document.getElementById('payments-menu');
+
+    // Load saved state from localStorage
+    const isOpen = localStorage.getItem('payments-menu-open') !== 'false';
+    if (!isOpen) {
+      paymentsMenu.classList.add('hidden');
+    }
+
+    paymentsToggle.addEventListener('click', () => {
+      const isCurrentlyOpen = !paymentsMenu.classList.contains('hidden');
+      if (isCurrentlyOpen) {
+        paymentsMenu.classList.add('hidden');
+        localStorage.setItem('payments-menu-open', 'false');
+      } else {
+        paymentsMenu.classList.remove('hidden');
+        localStorage.setItem('payments-menu-open', 'true');
+      }
+    });
+  </script>
+  <script src="/data-imports.js" defer></script>
 </body>
 </html>

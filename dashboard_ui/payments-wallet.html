@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <title>Payments vs Wallet | Spiro Reconciliation</title>
+    <link rel="icon" href="/favicon.svg">
+    <link rel="stylesheet" href="/styles.css?v=1">
+    <link rel="stylesheet" href="/payments-wallet.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <a class="brand" href="/"><span class="brand-mark">S</span><span>SPIRO<span class="brand-sub">OPERATIONS</span></span></a>
+        <div class="nav-label">WORKSPACE</div>
+        <a class="nav-item" href="/">▤ <span>Reconciliation</span></a>
+        <button id="payments-toggle" class="nav-item payments-toggle">▤ <span>Payments</span></button>
+        <div id="payments-menu" class="payments-submenu open">
+          <a class="nav-item sub-item active" href="/dashboard_ui/payments-wallet.html">◇ <span>Wallet</span></a>
+          <a class="nav-item sub-item" href="/dashboard_ui/payments-swap.html">◇ <span>Swap</span></a>
+        </div>
+        <div class="sidebar-bottom"><span class="status-dot"></span> Local workspace<span class="sidebar-note">Kenya & Rwanda</span></div>
+    </aside>
+
+
+    <main>
+        <header class="page-header">
+            <div>
+                <div class="eyebrow">FINANCE OPERATIONS / PAYMENTS</div>
+                <h1>Payments vs Wallet</h1>
+                <p>Compare Atlas and wallet transactions where Settled Against is Wallet Recharge in both systems.</p>
+            </div>
+            <span class="workspace-tag">Spiro operations</span>
+        </header>
+
+        <div id="error" class="error-banner" role="alert" hidden></div>
+
+    <details class="import-panel" id="import-panel" data-scope="payments">
+      <summary><span class="import-icon">＋</span><span><strong>Add files &amp; manage data</strong><span class="import-summary">Upload Zoho exports and refresh this dashboard</span></span><span class="import-open">Open ↓</span></summary>
+      <div class="import-body">
+        <div class="section-heading"><h2>Loaded data</h2><button type="button" class="reset" id="refresh-sources">Refresh</button></div>
+        <div id="source-inventory" class="source-inventory">Loading data sources…</div>
+        <div class="upload-area"><div><h2>Add Zoho exports</h2><p>Choose Atlas Payments or Wallet Transactions CSV files. The module is detected from the column headers. Original Zoho headers and database-style headers are accepted. Include Settled Against; only Wallet Recharge rows are compared.</p></div>
+          <label for="upload-files" class="file-label">CSV files <span>Up to 10 files, 512 MB each</span></label><input id="upload-files" type="file" accept=".csv,text/csv" multiple>
+          <p class="upload-hint">For exports over 200,000 rows, use date batches. Overlapping files are merged by Record Id. No balance or refund action is performed.</p>
+          <div class="upload-actions"><button type="button" class="button secondary" id="validate-files" disabled>Validate files</button><button type="button" class="button primary" id="import-files" disabled>Import validated files ↗</button><button type="button" class="reset" id="clear-files" disabled>Clear</button></div>
+        </div>
+        <p id="upload-message" class="upload-message" role="status" aria-live="polite"></p><div id="upload-error" class="error-banner" role="alert" hidden></div><div id="upload-jobs" class="upload-jobs"></div>
+        <details class="import-history"><summary>Recent imports</summary><div id="import-history">No imports yet.</div></details>
+      </div>
+    </details>
+
+        <section class="metrics" aria-label="Reconciliation summary">
+            <article class="metric">
+                <div class="metric-top">ATLAS TOTAL</div>
+                <strong id="atlas-total">—</strong>
+                <div>Atlas Wallet Recharge payments</div>
+            </article>
+            <article class="metric">
+                <div class="metric-top">WALLET TOTAL</div>
+                <strong id="wallet-total">—</strong>
+                <div>Wallet Recharge transactions</div>
+            </article>
+            <article class="metric">
+                <div class="metric-top">MATCHED <span class="green">✓</span></div>
+                <strong id="matched" class="status-matched">—</strong>
+                <div>Transactions in both systems</div>
+            </article>
+            <article class="metric attention">
+                <div class="metric-top">MISSING <span>!</span></div>
+                <strong id="missing-in-wallet" class="status-missing">—</strong>
+                <div>Wallet Recharge payments without a wallet match</div>
+            </article>
+        </section>
+
+        <section class="table-section">
+            <div class="table-heading">
+                <div>
+                    <h2>Missing in Wallet <span id="case-count" class="count-pill">—</span></h2>
+                    <p>Atlas Wallet Recharge payments with no matching Wallet Recharge entry and transaction ID in the wallet.</p>
+                </div>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>TRANSACTION NO</th>
+                            <th>CUSTOMER</th>
+                            <th class="amount-column">AMOUNT</th>
+                            <th>STATUS</th>
+                            <th>OPERATOR</th>
+                            <th>DATE</th>
+                        </tr>
+                    </thead>
+                    <tbody id="rows">
+                        <tr><td colspan="6" class="empty-state">Loading transactions…</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="pagination">
+                <span id="page-info">—</span>
+                <div>
+                    <button id="previous" class="page-button" disabled>← Previous</button>
+                    <button id="next" class="page-button" disabled>Next →</button>
+                </div>
+            </div>
+        </section>
+
+        <footer>Times and amounts reflect the original transaction data. Missing records require investigation to determine cause and remediation.</footer>
+    </main>
+
+    
+    
+    <script src="/payments-wallet.js" defer></script>
+    <script src="/data-imports.js" defer></script>
+</body>
+</html>

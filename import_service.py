@@ -25,7 +25,7 @@ def prepare_database(settings):
     with psycopg.connect(**settings, connect_timeout=15, autocommit=True) as conn:
         with conn.transaction():
             conn.execute('SELECT pg_advisory_xact_lock(18700)')
-            for name in ('01_create_tables.sql', '03_wallet_customer_mapping.sql', '06_backend_reconciliation.sql'):
+            for name in ('01_create_tables.sql', '03_wallet_customer_mapping.sql', '06_backend_reconciliation.sql', '07_payments_reconciliation.sql', '08_payments_wallet_recharge.sql', '09_swap_reconciliation.sql'):
                 conn.execute((PROJECT / 'sql' / name).read_text(encoding='utf-8'))
 
 
@@ -109,8 +109,12 @@ def source_inventory(settings):
 
 
 class ImportJobs:
-    def __init__(self, settings):
+    def __init__(self, settings, *, inspector=None, importer=None, schema='reconciliation', tables=None):
         self.settings = settings
+        self.inspector = inspector or inspect_csv
+        self.importer = importer or import_file
+        self.schema = schema
+        self.tables = tables or TABLES
         self.lock = threading.RLock()
         self.jobs = {}
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='spiro-import')
@@ -160,7 +164,7 @@ class ImportJobs:
     def _validate(self, key):
         path = self.jobs[key]['_path']
         try:
-            preview = inspect_csv(path, lambda rows, phase: self.update(key, processed_rows=rows, phase=phase))
+            preview = self.inspector(path, lambda rows, phase: self.update(key, processed_rows=rows, phase=phase))
             self.update(key, state='ready', phase='validated', preview=preview, processed_rows=preview['rows'])
         except (ValueError, UnicodeError, csv.Error) as exc:
             self.update(key, state='failed', error=str(exc), phase='validation failed')
@@ -182,12 +186,12 @@ class ImportJobs:
         job = self.jobs[key]
         try:
             with psycopg.connect(**self.settings, connect_timeout=15, autocommit=True) as conn:
-                result = import_file(conn, job['_path'], job['preview']['dataset'], sql,
+                result = self.importer(conn, job['_path'], job['preview']['dataset'], sql,
                                      progress=lambda rows, phase: self.update(key, processed_rows=rows, phase=phase))
                 self.update(key, state='complete', phase='imported', result=result, processed_rows=result['rows_read'])
                 # The data is already committed; statistics failure must not report an import failure.
                 try:
-                    conn.execute(sql.SQL('ANALYZE {}').format(sql.Identifier('reconciliation', TABLES[job['preview']['dataset']])))
+                    conn.execute(sql.SQL('ANALYZE {}').format(sql.Identifier(self.schema, self.tables[job['preview']['dataset']])))
                 except psycopg.Error:
                     pass
         except psycopg.Error:

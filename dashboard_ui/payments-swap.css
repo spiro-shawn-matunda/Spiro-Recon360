@@ -1,0 +1,3 @@
+.metrics { grid-template-columns: repeat(auto-fit, minmax(175px, 1fr)); }
+.payments-toggle { background: none; border: none; cursor: pointer; width: 100%; text-align: left; }
+@media (max-width: 750px) { .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

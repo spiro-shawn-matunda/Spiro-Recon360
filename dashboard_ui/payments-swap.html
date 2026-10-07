@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payments vs Swap | Spiro Reconciliation</title>
+    <link rel="icon" href="/favicon.svg">
+    <link rel="stylesheet" href="/styles.css">
+    <link rel="stylesheet" href="/payments-swap.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <a class="brand" href="/"><span class="brand-mark">S</span><span>SPIRO<span class="brand-sub">OPERATIONS</span></span></a>
+        <div class="nav-label">WORKSPACE</div>
+        <a class="nav-item" href="/">▤ <span>Reconciliation</span></a>
+        <button id="payments-toggle" class="nav-item payments-toggle">▤ <span>Payments</span></button>
+        <div id="payments-menu" class="payments-submenu open">
+          <a class="nav-item sub-item" href="/dashboard_ui/payments-wallet.html">◇ <span>Wallet</span></a>
+          <a class="nav-item sub-item active" href="/dashboard_ui/payments-swap.html">◇ <span>Swap</span></a>
+        </div>
+        <div class="sidebar-bottom"><span class="status-dot"></span> Local workspace<span class="sidebar-note">Kenya & Rwanda</span></div>
+    </aside>
+
+
+    <main>
+        <header class="page-header">
+            <div><div class="eyebrow">FINANCE OPERATIONS / PAYMENTS</div>
+                <h1>Payments vs Swap</h1>
+                <p>Match payment Atlas Transaction IDs to swap Transaction IDs. Only PAYMENT_OPERATOR swaps are compared.</p>
+            </div><button type="button" id="refresh" class="button secondary">Refresh</button>
+        </header>
+        <div id="error" class="error-banner" role="alert" hidden></div>
+    <details class="import-panel" id="import-panel" data-scope="swap-payments">
+      <summary><span class="import-icon">＋</span><span><strong>Add files &amp; manage data</strong><span class="import-summary">Upload Zoho exports and refresh this dashboard</span></span><span class="import-open">Open ↓</span></summary>
+      <div class="import-body">
+        <div class="section-heading"><h2>Loaded data</h2><button type="button" class="reset" id="refresh-sources">Refresh</button></div>
+        <div id="source-inventory" class="source-inventory">Loading data sources…</div>
+        <div class="upload-area"><div><h2>Add Zoho exports</h2><p>Choose swap payment exports with Record Id and Atlas Transaction ID, or swap exports with Record Id, Transaction ID and Pay Method. The file type is detected from headers. Only PAYMENT_OPERATOR swaps are compared.</p></div>
+          <label for="upload-files" class="file-label">CSV files <span>Up to 10 files, 512 MB each</span></label><input id="upload-files" type="file" accept=".csv,text/csv" multiple>
+          <p class="upload-hint">For exports over 200,000 rows, use date batches. Overlapping files are merged by Record Id. No balance or refund action is performed.</p>
+          <div class="upload-actions"><button type="button" class="button secondary" id="validate-files" disabled>Validate files</button><button type="button" class="button primary" id="import-files" disabled>Import validated files ↗</button><button type="button" class="reset" id="clear-files" disabled>Clear</button></div>
+        </div>
+        <p id="upload-message" class="upload-message" role="status" aria-live="polite"></p><div id="upload-error" class="error-banner" role="alert" hidden></div><div id="upload-jobs" class="upload-jobs"></div>
+        <details class="import-history"><summary>Recent imports</summary><div id="import-history">No imports yet.</div></details>
+      </div>
+    </details>
+
+        <section class="metrics" aria-label="Reconciliation summary">
+            <article class="metric"><div class="metric-top">PAYMENTS TOTAL</div><strong id="payment-total">&mdash;</strong><div>Records in swap_payments</div></article>
+            <article class="metric"><div class="metric-top">OPERATOR SWAPS</div><strong id="swap-total">&mdash;</strong><div>Pay Method is PAYMENT_OPERATOR</div></article>
+            <article class="metric"><div class="metric-top">MATCHED PAYMENTS</div><strong id="matched">&mdash;</strong><div>Payment ID found in operator swaps</div></article>
+            <article class="metric attention"><div class="metric-top">SWAPS WITHOUT PAYMENTS</div><strong id="missing-in-payments">&mdash;</strong><div>Operator swaps without a matching payment</div></article>
+            <article class="metric attention"><div class="metric-top">PAYMENTS WITHOUT SWAPS</div><strong id="missing-in-swap">&mdash;</strong><div>Payments without a matching operator swap</div></article>
+        </section>
+        <section class="table-section" aria-label="Swaps without matching payments">
+            <div class="table-heading"><div><h2>Swaps without matching payments <span id="swaps-count" class="count-pill">&mdash;</span></h2><p>PAYMENT_OPERATOR swaps whose Transaction ID is absent from payment Atlas Transaction IDs.</p></div></div>
+            <div class="table-scroll"><table><thead><tr><th>TRANSACTION ID</th><th>REFERENCE</th><th>CUSTOMER</th><th class="amount-column">AMOUNT</th><th>STATUS</th><th>PAY METHOD</th><th>DATE</th><th>REASON</th></tr></thead>
+                <tbody id="swaps-rows"><tr><td colspan="8" class="empty-state">Loading transactions...</td></tr></tbody></table></div>
+            <div class="pagination"><span id="swaps-page-info">Loading...</span><div><button id="swaps-previous" class="page-button" disabled>Previous</button><button id="swaps-next" class="page-button" disabled>Next</button></div></div>
+        </section>
+        <section class="table-section" aria-label="Payments without matching swaps">
+            <div class="table-heading"><div><h2>Payments without matching swaps <span id="payments-count" class="count-pill">&mdash;</span></h2><p>Payments whose Atlas Transaction ID is absent from PAYMENT_OPERATOR swap Transaction IDs.</p></div></div>
+            <div class="table-scroll"><table><thead><tr><th>TRANSACTION ID</th><th>REFERENCE</th><th>CUSTOMER</th><th class="amount-column">AMOUNT</th><th>STATUS</th><th>OPERATOR</th><th>DATE</th><th>REASON</th></tr></thead>
+                <tbody id="payments-rows"><tr><td colspan="8" class="empty-state">Loading transactions...</td></tr></tbody></table></div>
+            <div class="pagination"><span id="payments-page-info">Loading...</span><div><button id="payments-previous" class="page-button" disabled>Previous</button><button id="payments-next" class="page-button" disabled>Next</button></div></div>
+        </section>
+        <footer>Blank transaction IDs require review. Counts reflect individual source records; repeated IDs do not multiply matches. Payment and swap status do not change this ID-presence check.</footer>
+    </main>
+    <script src="/payments-swap.js" defer></script>
+    <script src="/data-imports.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Atlas vs Wallet Reconciliation</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .recon-header {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .recon-card {
+            background: var(--card-background);
+            padding: 1.5rem;
+            border-radius: 0.5rem;
+            border: 1px solid var(--border-color);
+        }
+
+        .recon-value {
+            font-size: 2rem;
+            font-weight: bold;
+            color: var(--primary-color);
+        }
+
+        .recon-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin-top: 0.5rem;
+        }
+
+        .status-matched {
+            color: #10b981;
+        }
+
+        .status-missing {
+            color: #ef4444;
+        }
+
+        .status-unmatched {
+            color: #f59e0b;
+        }
+
+        .recon-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1rem;
+        }
+
+        .recon-table th {
+            background: var(--header-background);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .recon-table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .recon-table tr:hover {
+            background: var(--hover-background);
+        }
+
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            margin-bottom: 2rem;
+        }
+
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 1rem;
+            color: var(--text-secondary);
+            border-bottom: 2px solid transparent;
+            transition: all 0.3s ease;
+        }
+
+        .tab-button.active {
+            color: var(--primary-color);
+            border-bottom-color: var(--primary-color);
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-secondary);
+        }
+
+        .pagination {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin-top: 2rem;
+        }
+
+        .pagination button {
+            padding: 0.5rem 1rem;
+            background: var(--button-background);
+            border: 1px solid var(--border-color);
+            border-radius: 0.25rem;
+            cursor: pointer;
+            font-size: 0.875rem;
+        }
+
+        .pagination button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .pagination button:hover:not(:disabled) {
+            background: var(--button-hover);
+        }
+
+        .amount {
+            text-align: right;
+            font-family: monospace;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(0,0,0,0.1);
+            border-radius: 50%;
+            border-top-color: var(--primary-color);
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div style="padding: 2rem;">
+        <h1>Atlas vs Wallet Reconciliation</h1>
+
+        <div class="recon-header">
+            <div class="recon-card">
+                <div class="recon-value" id="atlas-total">—</div>
+                <div class="recon-label">Atlas Total</div>
+            </div>
+            <div class="recon-card">
+                <div class="recon-value" id="wallet-total">—</div>
+                <div class="recon-label">Wallet Total</div>
+            </div>
+            <div class="recon-card">
+                <div class="recon-value status-matched" id="matched">—</div>
+                <div class="recon-label">Matched</div>
+            </div>
+            <div class="recon-card">
+                <div class="recon-value" id="match-percent">—</div>
+                <div class="recon-label">Match Rate</div>
+            </div>
+        </div>
+
+        <div class="recon-header">
+            <div class="recon-card">
+                <div class="recon-value status-missing" id="missing-in-wallet">—</div>
+                <div class="recon-label">Missing in Wallet</div>
+            </div>
+            <div class="recon-card">
+                <div class="recon-value status-unmatched" id="missing-in-atlas">—</div>
+                <div class="recon-label">Missing in Atlas</div>
+            </div>
+        </div>
+
+        <div id="error" hidden style="background: #fee; color: #c00; padding: 1rem; margin-bottom: 1rem; border-radius: 0.5rem;"></div>
+
+        <div class="tabs">
+            <button class="tab-button active" data-tab="missing-wallet">Missing in Wallet</button>
+            <button class="tab-button" data-tab="missing-atlas">Missing in Atlas</button>
+        </div>
+
+        <div id="missing-wallet" class="tab-content active">
+            <table class="recon-table">
+                <thead>
+                    <tr>
+                        <th>Transaction No</th>
+                        <th>Customer</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Operator</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="missing-wallet-rows">
+                    <tr><td colspan="6" class="empty-state"><div class="loading"></div> Loading...</td></tr>
+                </tbody>
+            </table>
+            <div class="pagination">
+                <button id="missing-wallet-prev" disabled>← Previous</button>
+                <span id="missing-wallet-page">Page 1</span>
+                <button id="missing-wallet-next">Next →</button>
+            </div>
+        </div>
+
+        <div id="missing-atlas" class="tab-content">
+            <table class="recon-table">
+                <thead>
+                    <tr>
+                        <th>Transaction No</th>
+                        <th>Customer</th>
+                        <th>Amount</th>
+                        <th>Status</th>
+                        <th>Operator</th>
+                        <th>Date</th>
+                    </tr>
+                </thead>
+                <tbody id="missing-atlas-rows">
+                    <tr><td colspan="6" class="empty-state"><div class="loading"></div> Loading...</td></tr>
+                </tbody>
+            </table>
+            <div class="pagination">
+                <button id="missing-atlas-prev" disabled>← Previous</button>
+                <span id="missing-atlas-page">Page 1</span>
+                <button id="missing-atlas-next">Next →</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const state = {
+            summary: null,
+            missing_wallet: { page: 0, data: null },
+            missing_atlas: { page: 0, data: null }
+        };
+
+        const number = value => new Intl.NumberFormat('en-GB').format(value);
+        const formatAmount = value => value ? Number(value).toFixed(2) : '—';
+        const formatDate = value => value ? new Date(value).toLocaleDateString() : '—';
+
+        async function loadSummary() {
+            try {
+                const response = await fetch('/api/atlas-wallet-summary');
+                if (!response.ok) throw new Error('Failed to load summary');
+                state.summary = await response.json();
+                renderSummary();
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        function renderSummary() {
+            const s = state.summary;
+            document.getElementById('atlas-total').textContent = number(s.atlas_total);
+            document.getElementById('wallet-total').textContent = number(s.wallet_total);
+            document.getElementById('matched').textContent = number(s.matched);
+            document.getElementById('match-percent').textContent = s.match_percentage + '%';
+            document.getElementById('missing-in-wallet').textContent = number(s.missing_in_wallet);
+            document.getElementById('missing-in-atlas').textContent = number(s.missing_in_atlas);
+        }
+
+        async function loadMissingWallet(page = 0) {
+            try {
+                const response = await fetch(`/api/atlas-wallet-missing?type=wallet&page=${page}`);
+                if (!response.ok) throw new Error('Failed to load missing wallet transactions');
+                const data = await response.json();
+                state.missing_wallet = { page, data };
+                renderMissingWallet();
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        async function loadMissingAtlas(page = 0) {
+            try {
+                const response = await fetch(`/api/atlas-wallet-missing?type=atlas&page=${page}`);
+                if (!response.ok) throw new Error('Failed to load missing atlas transactions');
+                const data = await response.json();
+                state.missing_atlas = { page, data };
+                renderMissingAtlas();
+            } catch (error) {
+                showError(error.message);
+            }
+        }
+
+        function renderMissingWallet() {
+            const data = state.missing_wallet.data;
+            const tbody = document.getElementById('missing-wallet-rows');
+
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No missing transactions</td></tr>';
+                document.getElementById('missing-wallet-next').disabled = true;
+                document.getElementById('missing-wallet-prev').disabled = true;
+                return;
+            }
+
+            tbody.innerHTML = data.records.map(r => `
+                <tr>
+                    <td>${r['Payment Transaction No'] || '—'}</td>
+                    <td>${r['Customer Name'] || '—'}</td>
+                    <td class="amount">${formatAmount(r['Amount'])} ${r['Currency'] || ''}</td>
+                    <td>${r['Payment Status'] || '—'}</td>
+                    <td>${r['Payment Operator'] || '—'}</td>
+                    <td>${formatDate(r['Transaction Date'])}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('missing-wallet-page').textContent = `Page ${state.missing_wallet.page + 1} of ${Math.ceil(data.total / data.limit)}`;
+            document.getElementById('missing-wallet-prev').disabled = state.missing_wallet.page === 0;
+            document.getElementById('missing-wallet-next').disabled = !data.has_more;
+        }
+
+        function renderMissingAtlas() {
+            const data = state.missing_atlas.data;
+            const tbody = document.getElementById('missing-atlas-rows');
+
+            if (!data.records.length) {
+                tbody.innerHTML = '<tr><td colspan="6" class="empty-state">No missing transactions</td></tr>';
+                document.getElementById('missing-atlas-next').disabled = true;
+                document.getElementById('missing-atlas-prev').disabled = true;
+                return;
+            }
+
+            tbody.innerHTML = data.records.map(r => `
+                <tr>
+                    <td>${r['Payment Transaction No'] || '—'}</td>
+                    <td>${r['Customer Name'] || '—'}</td>
+                    <td class="amount">${formatAmount(r['Amount'])} ${r['Currency'] || ''}</td>
+                    <td>${r['Payment Status'] || '—'}</td>
+                    <td>${r['Payment Operator'] || '—'}</td>
+                    <td>${formatDate(r['Transaction Date'])}</td>
+                </tr>
+            `).join('');
+
+            document.getElementById('missing-atlas-page').textContent = `Page ${state.missing_atlas.page + 1} of ${Math.ceil(data.total / data.limit)}`;
+            document.getElementById('missing-atlas-prev').disabled = state.missing_atlas.page === 0;
+            document.getElementById('missing-atlas-next').disabled = !data.has_more;
+        }
+
+        function showError(message) {
+            document.getElementById('error').hidden = false;
+            document.getElementById('error').textContent = message;
+        }
+
+        // Tab switching
+        document.querySelectorAll('.tab-button').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                document.querySelectorAll('.tab-button').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                e.target.classList.add('active');
+                const tabId = e.target.getAttribute('data-tab');
+                document.getElementById(tabId).classList.add('active');
+            });
+        });
+
+        // Pagination
+        document.getElementById('missing-wallet-prev').addEventListener('click', () => {
+            if (state.missing_wallet.page > 0) {
+                loadMissingWallet(state.missing_wallet.page - 1);
+            }
+        });
+
+        document.getElementById('missing-wallet-next').addEventListener('click', () => {
+            if (state.missing_wallet.data && state.missing_wallet.data.has_more) {
+                loadMissingWallet(state.missing_wallet.page + 1);
+            }
+        });
+
+        document.getElementById('missing-atlas-prev').addEventListener('click', () => {
+            if (state.missing_atlas.page > 0) {
+                loadMissingAtlas(state.missing_atlas.page - 1);
+            }
+        });
+
+        document.getElementById('missing-atlas-next').addEventListener('click', () => {
+            if (state.missing_atlas.data && state.missing_atlas.data.has_more) {
+                loadMissingAtlas(state.missing_atlas.page + 1);
+            }
+        });
+
+        // Initialize
+        loadSummary();
+        loadMissingWallet();
+        loadMissingAtlas();
+    </script>
+</body>
+</html>

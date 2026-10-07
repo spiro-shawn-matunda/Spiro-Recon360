@@ -5,7 +5,14 @@ PROJECT = Path(__file__).resolve().parent
 
 
 def read_database_config(env_path=None):
-    path = Path(env_path) if env_path is not None else PROJECT / ".env"
+    if env_path is not None:
+        path = Path(env_path)
+    else:
+        # Look for .env in current directory first, then parent directory
+        path = PROJECT / ".env"
+        if not path.is_file():
+            path = PROJECT.parent / ".env"
+
     if not path.is_file():
         raise ValueError("Missing .env file. Copy .env.example to .env and enter your PostgreSQL details.")
     try:

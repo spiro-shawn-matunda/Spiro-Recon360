@@ -1,0 +1,34 @@
+
+        .recon-header {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 15px;
+            margin-bottom: 26px;
+        }
+
+        .recon-card {
+            background: #fff;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 19px 20px 16px;
+        }
+
+        .recon-value {
+            font-size: 32px;
+            font-weight: 600;
+            letter-spacing: -1.2px;
+            color: var(--ink);
+        }
+
+        .recon-label {
+            font-size: 9px;
+            color: var(--muted);
+            margin-top: 8px;
+            letter-spacing: 0.75px;
+        }
+
+        .status-matched { color: var(--green); }
+        .status-missing { color: #d32f2f; }
+        .status-unmatched { color: var(--amber); }
+    
+.payments-toggle { background: none; border: none; cursor: pointer; width: 100%; text-align: left; }

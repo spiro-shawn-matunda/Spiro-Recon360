@@ -28,11 +28,13 @@ STATIC = {
     "/data-imports.js": "data-imports.js",
     "/payments-wallet.js": "payments-wallet.js",
     "/payments-swap.js": "payments-swap.js",
+    "/payments-due.js": "payments-due.js",
     "/payments-swap.css": "payments-swap.css",
     "/payments-wallet.css": "payments-wallet.css",
     "/favicon.svg": "favicon.svg",
     "/dashboard_ui/payments-wallet.html": "payments-wallet.html",
     "/dashboard_ui/payments-swap.html": "payments-swap.html",
+    "/dashboard_ui/payments-due.html": "payments-due.html",
     "/dashboard_ui/reconciliation.html": "reconciliation.html"
 }
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml"}

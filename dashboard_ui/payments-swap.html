@@ -13,11 +13,14 @@
         <a class="brand" href="/"><span class="brand-mark">S</span><span>SPIRO<span class="brand-sub">OPERATIONS</span></span></a>
         <div class="nav-label">WORKSPACE</div>
         <a class="nav-item" href="/">▤ <span>Reconciliation</span></a>
-        <button id="payments-toggle" class="nav-item payments-toggle">▤ <span>Payments</span></button>
-        <div id="payments-menu" class="payments-submenu open">
+        <details class="payments-navigation">
+          <summary id="payments-toggle" class="nav-item payments-toggle"><span aria-hidden="true">&#9636;</span><span>Payments</span><svg class="payments-chevron" aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+          <div id="payments-menu" class="payments-submenu">
           <a class="nav-item sub-item" href="/dashboard_ui/payments-wallet.html">◇ <span>Wallet</span></a>
           <a class="nav-item sub-item active" href="/dashboard_ui/payments-swap.html">◇ <span>Swap</span></a>
+          <a class="nav-item sub-item" href="/dashboard_ui/payments-due.html">&#9671; <span>Due</span></a>
         </div>
+        </details>
         <div class="sidebar-bottom"><span class="status-dot"></span> Local workspace<span class="sidebar-note">Kenya & Rwanda</span></div>
     </aside>
 

@@ -107,26 +107,6 @@ const state = { summary: null, page: 0, data: null };
         loadSummary();
         loadData();
 
-const paymentsToggle = document.getElementById('payments-toggle');
-        const paymentsMenu = document.getElementById('payments-menu');
-
-        // Load saved state from localStorage
-        const isOpen = localStorage.getItem('payments-menu-open') !== 'false';
-        if (!isOpen) {
-            paymentsMenu.classList.add('hidden');
-        }
-
-        paymentsToggle.addEventListener('click', () => {
-            const isCurrentlyOpen = !paymentsMenu.classList.contains('hidden');
-            if (isCurrentlyOpen) {
-                paymentsMenu.classList.add('hidden');
-                localStorage.setItem('payments-menu-open', 'false');
-            } else {
-                paymentsMenu.classList.remove('hidden');
-                localStorage.setItem('payments-menu-open', 'true');
-            }
-        });
-
         document.addEventListener('data-imported', () => {
             document.getElementById('error').hidden = true;
             loadSummary();

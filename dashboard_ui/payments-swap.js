@@ -41,8 +41,5 @@ async function refresh() {
 for(const kind of ['swaps','payments']) {el(kind+'-previous').addEventListener('click',()=>loadPage(kind,pages[kind].page-1));el(kind+'-next').addEventListener('click',()=>loadPage(kind,pages[kind].page+1));}
 el('refresh').addEventListener('click',refresh);
 document.addEventListener('data-imported',refresh);
-const menu=el('payments-menu');const toggle=el('payments-toggle');
-try {menu.classList.toggle('hidden',localStorage.getItem('payments-menu-open')==='false');}catch(e){}
-toggle.addEventListener('click',()=>{menu.classList.toggle('hidden');try {localStorage.setItem('payments-menu-open',String(!menu.classList.contains('hidden')));}catch(e){}});
 refresh();
 })();

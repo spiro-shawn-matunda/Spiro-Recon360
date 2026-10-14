@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payments vs Due | Spiro Reconciliation</title>
+    <link rel="icon" href="/favicon.svg">
+    <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+    <aside class="sidebar">
+        <a class="brand" href="/"><span class="brand-mark">S</span><span>SPIRO<span class="brand-sub">OPERATIONS</span></span></a>
+        <div class="nav-label">WORKSPACE</div>
+        <a class="nav-item" href="/">▤ <span>Reconciliation</span></a>
+        <details class="payments-navigation" open>
+          <summary id="payments-toggle" class="nav-item payments-toggle"><span aria-hidden="true">&#9636;</span><span>Payments</span><svg class="payments-chevron" aria-hidden="true" viewBox="0 0 16 16" width="14" height="14"><path d="m4 6 4 4 4-4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></summary>
+          <div id="payments-menu" class="payments-submenu">
+          <a class="nav-item sub-item" href="/dashboard_ui/payments-wallet.html">◇ <span>Wallet</span></a>
+          <a class="nav-item sub-item" href="/dashboard_ui/payments-swap.html">◇ <span>Swap</span></a>
+          <a class="nav-item sub-item active" aria-current="page" href="/dashboard_ui/payments-due.html">&#9671; <span>Due</span></a>
+        </div>
+        </details>
+        <div class="sidebar-bottom"><span class="status-dot"></span> Local workspace<span class="sidebar-note">Uganda, Kenya &amp; Rwanda</span></div>
+    </aside>
+
+
+    <main>
+        <header class="page-header">
+            <div>
+                <div class="eyebrow">FINANCE OPERATIONS / PAYMENTS</div>
+                <h1>Payments vs Due</h1>
+                <p>Highlight Uganda rent-settlement payments missing Union Due ID (New).</p>
+            </div>
+            <span class="workspace-tag">Awaiting data</span>
+        </header>
+        <div class="source-note" role="status">
+            <span class="note-icon" aria-hidden="true">i</span>
+            <div><strong id="due-source-title">No due-payment data loaded yet</strong><span id="due-source-caption">The country filter is ready. Results will appear once your due-payment and due data is loaded.</span></div>
+        </div>
+        <form id="due-filters" class="filter-bar" aria-label="Due reconciliation filters">
+            <label for="due-country">COUNTRY
+                <select id="due-country" name="country">
+                    <option value="">All countries</option>
+                    <option value="Uganda">Uganda</option>
+                    <option value="Kenya">Kenya</option>
+                    <option value="Rwanda">Rwanda</option>
+                </select>
+            </label>
+            <label for="due-remarks">PAYMENT REMARKS
+                <input id="due-remarks" value="Settlement of Rent" readonly aria-describedby="due-scope-note">
+            </label>
+            <button type="submit" class="button primary">Apply filters</button>
+            <button type="button" id="due-reset" class="reset">Reset</button>
+        </form>
+        <p id="due-scope-note" class="due-filter-note">Uganda No due rule: Remarks = Settlement of Rent and Union Due ID (New) is null, empty or whitespace-only.</p>
+        <section class="metrics due-metrics" aria-label="Due payment reconciliation summary">
+            <article class="metric">
+                <div class="metric-top">DUE PAYMENTS TOTAL</div>
+                <strong aria-label="Not available yet">&mdash;</strong>
+                <div>Settlement of Rent payments in the selected country</div>
+            </article>
+            <article class="metric">
+                <div class="metric-top">DUES TOTAL</div>
+                <strong id="dues-total" aria-label="Not available yet">&mdash;</strong>
+                <div>Due records in the selected country</div>
+            </article>
+            <article class="metric">
+                <div class="metric-top">WITH A DUE ID</div>
+                <strong aria-label="Not available yet">&mdash;</strong>
+                <div>Payments with Union Due ID (New) populated</div>
+            </article>
+            <article class="metric attention">
+                <div class="metric-top">NO DUE</div>
+                <strong aria-label="Not available yet">&mdash;</strong>
+                <div>Uganda rent-settlement payments missing Union Due ID (New)</div>
+            </article>
+        </section>
+        <section class="table-section" aria-label="No due">
+            <div class="table-heading">
+                <div><h2>No due <span class="count-pill">Awaiting data</span></h2><p>Uganda payments with Remarks = Settlement of Rent and no Union Due ID (New) will be listed here.</p></div>
+            </div>
+            <div class="table-scroll">
+                <table>
+                    <thead><tr><th>ATLAS TRANSACTION ID</th><th>PAYMENT REFERENCE</th><th>CUSTOMER</th><th class="amount-column">AMOUNT</th><th>PAYMENT STATUS</th><th>UNION DUE ID (NEW)</th><th>OPERATOR</th><th>DATE</th></tr></thead>
+                    <tbody><tr><td colspan="8" class="empty-state"><strong id="due-empty-title">Ready for due-payment data</strong><p id="due-empty-caption">Your rent-settlement payments without a Due ID will appear here once data is available.</p></td></tr></tbody>
+                </table>
+            </div>
+        </section>
+        <footer>Amounts and dates will reflect the supplied payment records.</footer>
+    </main>
+    <script src="/payments-due.js" defer></script>
+</body>
+</html>

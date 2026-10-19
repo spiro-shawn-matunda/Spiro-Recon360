@@ -15,7 +15,7 @@ Added a **PAYMENTS** section in the sidebar with two submenu items:
 
 #### 1. Payments vs Wallet (`payments-wallet.html`)
 - **Purpose:** Identify payment transactions that exist in atlas but are missing from wallet
-- **Shows:** 
+- **Shows:**
   - Total payments in atlas
   - Total wallet transactions
   - Matched count

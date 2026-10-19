@@ -8,7 +8,7 @@ from decimal import InvalidOperation
 
 import psycopg
 from psycopg import sql
-from import_csv import parse_value
+from app.import_csv import parse_value
 
 SCHEMA = 'due_reconciliation'
 TABLES = {'due_payments': 'due_payments'}

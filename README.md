@@ -1,88 +1,82 @@
-# SpiroData in PyCharm
+# Spiro dashboard
 
-For the two missing-counterpart groups, see **MISSING_COUNTERPARTS.md** and **reports/missing_counterparts/**. Run `main.py --export-unmatched` to regenerate both CSVs from the latest loaded data.
+Reconcile Zoho wallet deductions and swaps for Kenya and Rwanda. Upload exports, investigate transactions, and download filtered results.
 
-This project imports Kenya and Rwanda wallet deductions, swap transactions, and Wallets/customer mappings into the existing PostgreSQL database `Spiro`. Run `main.py` to prepare the database and start the dashboard. Add new Zoho CSV exports under **Add files & manage data**. Connection settings come from the project's `.env`; the older CLI batch importer still uses `config.json`. See **SELF_SERVICE.md** for the daily workflow.
+## Run
 
-## Kenya wallet mapping
+In PyCharm, use the project's interpreter and run **main.py** or **Spiro - Main**. Open **http://127.0.0.1:8765/** and keep the run active. Startup prepares database tables/views/indexes and preserves existing source records. Connection settings always come from the project's root `.env`.
 
-You reported that `main.py` already loaded the two transaction exports. Open **load_wallets.py** in PyCharm and Run it to add the Wallets module without reimporting the transactions. Alternatively select **Load Wallet Customers** in the run configurations.
+**Home** is the shared landing page. The left sidebar has an expandable **Swap** category containing **Wallet & Swap**, **Missing Counterparts**, **Swap to Due** and **Swap to Offer**. Home also provides shortcuts to each module. Wallet & Swap preserves the deduction, matched, review and missing-swap cards plus country cards. Uploads remain available under Add files & manage data.
 
-The new `data/Wallet_2026_10_05.csv` contains 39,437 Kenya wallets. The project copy excludes the Wallet Pin column, and the importer also strips that field before saving raw JSON. The original attachment is unchanged.
+The From and Through filters list only creation dates present in the database for the selected country and module. Missing Counterparts uses wallet dates for wallet groups and swap dates for swap groups; Due and Offer pages use swap creation dates. Both endpoints include the selected day. Dates outside the new scope are cleared when switching modules or countries. Apply filters updates results; Reset clears the selection. Refresh results and completed imports reload available dates.
 
-Refresh **Schemas > reconciliation** in DBeaver. The new table is `reconciliation.wallets`; the new customer-enriched view is `reconciliation.wallet_swap_customer_review`. The original transaction tables and review view remain available. Use `sql/04_customer_review_queries.sql` to review customer mappings and investigation candidates.
+**Swap to Due** reconciles swaps with Pay Method `DUE_CREATED` to Dues using exact country + `Swapping Transaction.id` → swap `Record Id`. A unique link with matching customer, amount and available currency is matched. Only an exact matching Due marked Paid clears a swap without a wallet debit. Pending, Closed, missing links, duplicate Dues and discrepancies remain open for review. Cleared swaps stay available under Cleared by Paid Dues and leave missing-counterpart review exports. Countries without any loaded Due records are shown as awaiting a Due export. Use the result selector to inspect/export review candidates, matched records, Paid, Pending, Closed or all swaps. Date filters select swaps and check Dues across all loaded dates. Due payment status comes from the export; Closed does not mean Paid. Due Amount can remain populated on Paid records and is not a verified outstanding balance. Blank swap Transaction IDs do not prevent Due matching. Original sources remain intact.
 
-## Run all imports
+Dashboard results are stored in indexed PostgreSQL materialized views. The first run builds these results once; normal loads reuse them. Imports refresh them before reporting completion. Wallet and swap source edits invalidate the stored results, including changes made through DBeaver. Due and offer resolution evidence is checked live on every request. The next read rebuilds a dirty cache. An unchanged restart does not recalculate matching. Original tables and report rules remain the source of truth; Python report commands can still query them directly.
 
-1. Open this folder as the PyCharm project.
-2. Select `.venv/Scripts/python.exe` under Settings > Python Interpreter if necessary.
-3. Set the PostgreSQL details in `.env`, using the same account and exact database name as DBeaver.
-4. Run `validate_data.py` to validate the configured CSVs without accessing PostgreSQL.
-5. Run `main.py --import-config` to create/update the reconciliation schema and import all configured files. The database account needs permission to create or alter the reconciliation tables and views.
+For a fresh clone, copy `.env.example` to `.env`, enter PostgreSQL connection details, and install `requirements.txt` in your project environment.
 
-```dotenv
-DB_HOST=localhost
-DB_PORT=5432
-DB_NAME=Spiro
-DB_USER=admin
-DB_PASSWORD='your_actual_password'
+Choose **Add files & manage data → Validate files → Import validated files** to load Wallets, Wallet Transactions, Swapping Transactions, Dues, Offer Allocation and Offer Consumptions CSVs. Files merge by Record Id, and Wallet PINs are excluded. Completed Due imports open Swap to Due; offer imports open Swap to Offer; other imports refresh the active view. Use date batches for Zoho exports that exceed its export cap.
+
+Swap to Due shows all loaded Due records and their exported statuses separately from the statuses of Dues linked to the selected swaps. Source counts use all Due dates for the selected country. Upload validation reports blank swap lookups, and the country cards show missing lookups and files that reached the 200,000-row cap. A country can have Pending Dues even when no Due-created swap can be matched. The overview shows swap review and Paid Due resolution counts alongside the wallet deduction cards. Adding Dues can lower swap review without changing wallet deduction counts. Paid Due decisions are checked live against the full cached gap list: a Paid → Pending edit reopens the case without rebuilding the wallet cache.
+
+**Swap to Offer** tracks `OFFER_APPLIED` swaps. Exact country + `Swap Transaction ID.id` joins consumptions to swaps; `Offer Allocation ID` joins the allocation business reference. A unique one-time SOC voucher clears only a successful zero-charge swap with full non-billable SOC coverage, matching CRM and business customer IDs, matching wallet currency, valid dates and consistent voucher balances. All loaded consumption totals are checked against the allocation. Expiry conflicts, date differences, duplicate links, partial coverage, discounts and repeated-frequency offers remain open. Historical `Expired` status alone does not invalidate a valid earlier consumption. Offer Created terms are not loaded or inferred from offer names. Source records remain unchanged, and later edits can reopen cases immediately. The overview and open-swap CSV exports use the same resolution rules.
+
+The **Payments** sidebar opens Wallet, Swap and Due payment reconciliation. Each page has its own uploads and source inventory, stored separately in `payments_reconciliation`, `swap_reconciliation` and `due_reconciliation`. Startup prepares these schemas alongside the existing wallet/swap dashboard. Payment pages are served from `web/`; the existing `/dashboard_ui/payments-*.html` URLs remain available.
+
+## Project directory
+
+```text
+main.py       Dashboard entry point
+app/          Python API, imports, matching and report logic
+web/          Dashboard HTML, CSS and JavaScript
+sql/          Database schema, views and indexes
+tests/        Unit/integration tests and synthetic fixtures
+tools/        Optional batch imports, validation and setup utilities
+data/         Local CSVs, ignored by Git
+reports/      Generated reports, ignored by Git
+.env          Local database credentials, ignored by Git
 ```
 
-The application reads `.env` beside `main.py` every time, even when launched from another working directory. It does not prompt for database credentials. Single quotes preserve spaces and `#`; escape an apostrophe within a single-quoted password as `\'`. `${...}` remains literal. `.env` is excluded from Git; `.env.example` is the shareable blank template. Missing settings stop the script with an error naming the fields.
+| Change | Start here |
+|---|---|
+| Dashboard appearance and interactions | `web/index.html`, `web/styles.css`, `web/app.js` |
+| HTTP routes | `app/dashboard.py` |
+| Upload validation/imports | `app/import_service.py`, `app/import_csv.py` |
+| Reconciliation rules | `app/reconciliation_backend.py`, `sql/` |
+| Missing-counterpart groups | `app/counterpart_tracking.py`, `app/missing_counterparts.py` |
+| Due-created swap tracking | `app/due_tracking.py` |
+| Offer coverage and evidence | `app/offer_tracking.py` |
+| PostgreSQL settings | `.env` and `app/db_config.py` |
+| Dashboard performance and refresh | `app/dashboard_cache.py`, `sql/dashboard_cache.sql` |
 
-The PostgreSQL driver and python-dotenv are installed in the existing virtual environment. From the PyCharm terminal:
+Keep dashboard code in `app/` and `web/`. Optional helpers and their old PyCharm launch configurations are in `tools/`. The sole active launch configuration is **Spiro - Main**. SQL examples are under `sql/examples/`; existing reports are under `reports/reconciliation/` or `reports/missing_counterparts/`.
+
+## Reports
+
+**Reconciliation overview** compares committed swap debits with swaps and shows amount/status review flags. **Missing counterparts** separates usable references with no loaded counterpart from records with missing identifiers. Match using exact country + nonblank Transaction ID. Date filters select each source record while checking counterparts across all loaded dates. Blank IDs and non-wallet methods do not establish a missing charge. Counts reflect loaded exports; source coverage still needs verification.
+
+Download filtered CSVs from the dashboard, or use the same entry point for project exports:
 
 ```powershell
-.\.venv\Scripts\python.exe validate_data.py
-.\.venv\Scripts\python.exe load_wallets.py
-# Or import all configured files:
-.\.venv\Scripts\python.exe main.py --import-config
+python main.py --export-unmatched
+python main.py --export-review --country Rwanda
 ```
 
-`config.json` lists `wallet_master_files`, `wallet_files`, and `swap_files`. Add subsequent exports to these lists. Each file commits independently. Imports deduplicate by exact Zoho Record Id, and older source versions do not replace newer ones. Reimporting identical data leaves existing records unchanged. Raw JSON retains the exported fields except Wallet Pin. A future Zoho API adapter needs explicit field mappings and consistent ID normalization.
+Report options: `--country`, `--start`, `--end`, `--output`; review reports also accept `--status`. The existing `--import-config` and `--dry-run` options remain available through `main.py` for configured local files. The server currently accepts local connections only.
 
-## Results for the supplied Kenya exports
+## Review safeguards
 
-- Wallets: 39,437 records, all Kenya and currency KES.
-- Wallet deductions: 200,000 records; swaps: 200,000 records.
-- Every supplied wallet deduction has a matching wallet master record with customer lookup, business reference, and name.
-- 198,466 transaction IDs match a successful swap with the same amount.
-- 1,534 deductions have no swap in the supplied data. Of these, 1,494 occur after the latest observed swap timestamp; 40 fall within the observed time span. All 40 now have customer details.
-- Of the matched pairs, 198,458 have agreeing customer lookup IDs; eight lack a swap-side customer lookup. None have differing nonblank customer lookup IDs.
+Imports distinguish `complete` from `complete_with_warnings`. Statistics or dashboard-cache refresh failures are logged and shown on the file card; committed records stay imported. Failed imports report rollback only when the file did not commit. Database request errors include safe, actionable messages while the application logs retain the traceback, route and SQLSTATE.
 
-Wallet deductions join `Wallet.id` to the Wallets module's `Record Id`. `Wallet ID` is a display/business code and has a duplicate in this export, so it is not used as the primary key. `Customer.id` is the Zoho lookup ID; `Customer ID` is a separate business reference.
+Abandoned upload reservations expire after 15 minutes, inactive finished/validated sessions after one hour, and queued/running validation or imports after four hours. Cleanup runs every 30 seconds and on job operations. Running jobs keep their files until their worker stops; expired workers are cancelled cooperatively and active database queries receive a cancellation request. Imports have a four-hour statement timeout and a two-minute lock timeout. Upload reads allow two minutes of inactivity and reset that timeout as bytes arrive. Status polling retries transient failures up to five times with backoff; upload and commit POSTs are never retried automatically.
 
-The new view adds `wallet_customer_id`, `wallet_customer_reference`, `wallet_customer_name`, `wallet_currency`, `customer_mapping_status`, and `swap_customer_lookup_check`. Customer mappings and currency come from the current Wallets snapshot; balances do not establish a customer's balance at a historical deduction.
+API requests accept at most ten query parameters, reject repeated/unknown parameters, and validate Record Ids/cursors as 1–180 letters, digits, underscores, dots, colons or hyphens, starting with a letter or digit. Source Record Ids use the same validation on import. Cursor values remain exact source IDs and are SQL parameters; they are not authentication tokens.
 
-## Work still needed for TEC-187
+CSV exports escape formula-like source strings across all report paths. Known amount strings remain numeric only after finite decimal validation. Validation and `--dry-run` flag negative values, zero transaction amounts, monetary values of at least one billion source units and monetary precision beyond two decimal places. These are review warnings, not approved currency-specific business rules; values are preserved exactly. Non-finite values and values outside PostgreSQL numeric storage limits are rejected. Zero-charge offers, paid Dues and negative ledger balances can be legitimate and remain importable.
 
-The transaction exports were downloaded on 5 October but cover 23-28 September. Both reached the 200,000-row cap. Export complete date batches and compare source counts before treating missing swaps as confirmed failures. Include relevant swap statuses and allow for delayed swap creation at batch boundaries. The 40 candidates are investigation records, not confirmed refund liability.
+See `code_review_resolution.md` for the disposition of each GitHub finding.
 
-Nine matched swaps use OFFER_APPLIED and need a business-rule check. Credits/refunds are outside the supplied wallet filter. Timestamps have no timezone offset and remain literal until the export timezone is confirmed. Complete coverage and acceptance checks are still needed before closing the ticket.
+## Tests
 
-The supplied files and schema migration were validated against a separate PostgreSQL 17.5 test instance, including customer joins, PIN exclusion, and repeated imports.
-
-## Rwanda exports added on 5 October 2026
-
-The three Rwanda exports are stored with `Rwanda_` prefixes in `data/` and are included in `config.json`. Run **load_rwanda.py** or select **Load Rwanda CSV** to load only these files. Run **main.py --import-config** to import all configured Kenya and Rwanda exports; unchanged source rows are not duplicated.
-
-The reconciliation joins successful swaps by both **country and Transaction ID**, and wallet/customer mappings by **country and wallet Record Id**. Query `sql/05_country_review_queries.sql` for country and currency summaries. Transaction amounts are not combined across currencies. Investigation cutoffs use each country's observed swap end date.
-
-Rwanda source results:
-
-- 53,356 wallet master records; 200,000 deductions; 200,000 swaps.
-- All 200,000 deductions link to wallet/customer records.
-- 199,844 matched successful swaps with equal amounts; 156 deductions have no swap in the supplied data.
-- 90 unmatched deductions are within Rwanda's observed swap time span; 66 are after its latest swap timestamp. These are investigation candidates rather than confirmed failed swaps.
-- Deductions cover 23 September 2026 03:00:02 through 25 September 18:59:07. Swaps cover 23 September 03:00:04 through 25 September 18:57:32.
-- Wallet currencies are 53,355 RWF and one USD. Preserve the USD value as supplied and review that source wallet. Wallet Pin is excluded from the project copy and imported raw JSON.
-
-Both Rwanda transaction exports contain exactly 200,000 rows; observed date bounds alone do not establish full source coverage. Rwanda Record Ids do not overlap the supplied Kenya Record Ids. The Kenya results remain 198,466 matches and 1,534 deductions without a loaded swap.
-
-## TEC-188 backend
-
-Run **reconcile.py** to generate country-specific summaries and review candidate reports from the loaded database. See **TEC188_README.md** for the Python dashboard interface, date filters, review rules and validation. This reads the project's `.env` and uses existing dependencies.
-
-## TEC-189 dashboard
-
-Run **main.py** in PyCharm (or select **Spiro - Main**) and open **http://127.0.0.1:8765**. Use **Add files & manage data** to validate and import new CSV exports without editing config.json. The local dashboard provides country/date filters, live counts, review records, transaction details and candidate CSV export. See **TEC189_README.md**. No new dependencies are required.
+Run `python -m unittest discover -s tests -v` for unit tests; integration tests require an explicit `SPIRO_TEST_DSN` and never read `.env`. For the full suite, create a **new empty disposable PostgreSQL database**, set `SPIRO_TEST_DSN` to its connection string, and run `python tests/run.py`. The runner creates synthetic fixtures and refuses a database that already has user tables.

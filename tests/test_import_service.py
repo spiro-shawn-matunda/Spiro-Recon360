@@ -14,9 +14,9 @@ from unittest.mock import patch
 
 import psycopg
 from psycopg.conninfo import conninfo_to_dict
-from dashboard import DashboardServer
-from import_csv import MAPS
-from import_service import MAX_UPLOAD_BYTES, inspect_csv
+from app.dashboard import DashboardServer
+from app.import_csv import MAPS
+from app.import_service import MAX_UPLOAD_BYTES, inspect_csv
 
 
 def csv_bytes(dataset='wallet_master', records=None, extra_headers=()):
@@ -30,6 +30,30 @@ def csv_bytes(dataset='wallet_master', records=None, extra_headers=()):
 
 
 class ValidationTests(unittest.TestCase):
+    def test_due_validation_reports_missing_swap_lookups_without_rejecting_records(self):
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / 'rwanda-dues.csv'
+            path.write_bytes(csv_bytes('due', [
+                {'Record Id':'linked', 'Country':'Rwanda', 'Swapping Transaction.id':'swap-one'},
+                {'Record Id':'unlinked', 'Country':'Rwanda', 'Swapping Transaction.id':'', 'Status':'Pending'},
+            ]))
+            result = inspect_csv(path)
+            self.assertEqual(result['rows'], 2)
+            self.assertEqual(result['swap_lookup_rows'], 1)
+            self.assertEqual(result['missing_swap_lookup_rows'], 1)
+
+    def test_due_detection_preserves_exact_swap_lookup_and_blank_original_amount(self):
+        from app.import_csv import read_rows
+        with TemporaryDirectory() as folder:
+            path = Path(folder) / 'dues.csv'
+            path.write_bytes(csv_bytes('due', [{'Record Id':'zcrm_1234567890123456789', 'Country':'Kenya',
+                'Swapping Transaction.id':'zcrm_9876543210123456789','Due Amount':'12.10',
+                'Due Creation Date':'2026-09-23','Due Settlement Date':'2026-10-01'}]))
+            self.assertEqual(inspect_csv(path)['dataset'], 'due')
+            row = next(read_rows(path, 'due'))
+            self.assertEqual(row['swap_record_id'], 'zcrm_9876543210123456789')
+            self.assertIsNone(row['original_due_amount'])
+
     def test_master_detection_and_pin_removed_from_storage(self):
         with TemporaryDirectory() as folder:
             path = Path(folder) / 'master.csv'
@@ -54,7 +78,7 @@ class ValidationTests(unittest.TestCase):
     def test_main_defaults_to_setup_and_dashboard(self):
         import main
         settings = {'example': 'test'}
-        with patch('main.read_database_config', return_value=settings), patch('import_service.prepare_database') as prepare, patch('dashboard.serve') as serve, patch('main.read_config') as config:
+        with patch('main.read_database_config', return_value=settings), patch('app.import_service.prepare_database') as prepare, patch('app.dashboard.serve') as serve, patch('tools.batch.read_config') as config:
             main.main(['--port', '8767'])
             prepare.assert_called_once_with(settings)
             serve.assert_called_once_with(settings, 8767)
@@ -76,7 +100,7 @@ class UploadIntegrationTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.server.shutdown(); cls.server.server_close(); cls.thread.join()
         with psycopg.connect(**cls.settings) as conn:
-            for table in ('wallets', 'wallet_transactions', 'swap_transactions'):
+            for table in ('dues', 'wallets', 'wallet_transactions', 'swap_transactions'):
                 conn.execute(psycopg.sql.SQL('DELETE FROM {} WHERE zoho_record_id LIKE %s').format(psycopg.sql.Identifier('reconciliation', table)), ('selfservice-test-%',))
             conn.execute("DELETE FROM reconciliation.import_batches WHERE source_file LIKE 'selfservice-test-%'")
 
@@ -163,6 +187,41 @@ class UploadIntegrationTests(unittest.TestCase):
         self.assertEqual(data['record']['wallet_amount'], '2377.10')
         self.assertEqual(data['record']['wallet_currency'], 'RWF')
 
+    def test_due_upload_repeat_and_updated_payment_status_reconcile_swaps(self):
+        swap = {'Record Id':'selfservice-test-due-swap', 'Country':'Kenya', 'Customer.id':'customer_ke',
+                'Pay Method':'DUE_CREATED', 'Status':'SUCCESS', 'Swap Amount':'120.10', 'Created On':'2040-01-01'}
+        job = self.upload(csv_bytes('swap', [swap]), 'selfservice-test-due-swap.csv')
+        self.assertEqual(self.commit(job['id'])[0], 202)
+        self.assertEqual(self.wait(job['id'])['state'], 'complete')
+        due = {'Record Id':'selfservice-test-due', 'Due ID':'DUE-TEST', 'Country':'Kenya', 'Currency':'KES',
+               'Customer.id':'customer_ke', 'Swapping Transaction.id':'selfservice-test-due-swap',
+               'Due Amount':'120.10', 'Status':'Pending', 'Created On':'2040-01-02', 'Last Modified On':'2040-01-02'}
+        for expected_applied in (1, 0):
+            job = self.upload(csv_bytes('due', [due]), 'selfservice-test-dues.csv')
+            self.assertEqual(job['preview']['dataset'], 'due')
+            self.assertEqual(self.commit(job['id'])[0], 202)
+            done = self.wait(job['id'])
+            self.assertEqual(done['state'], 'complete')
+            self.assertEqual(done['result']['rows_applied'], expected_applied)
+        status, result = self.request('/api/due-swaps?country=Kenya&start=2040-01-01&group=matched')
+        self.assertEqual(status, 200)
+        self.assertEqual(result['summary']['matched_count'], 1)
+        self.assertEqual(result['summary']['resolved_count'], 0)
+        self.assertEqual(result['summary']['needs_review_count'], 1)
+        self.assertEqual(result['page']['records'][0]['due_status'], 'Pending')
+        due.update(Status='Paid', **{'Last Modified On':'2040-01-03','Due Settlement Date':'2040-01-03'})
+        job = self.upload(csv_bytes('due', [due]), 'selfservice-test-dues-updated.csv')
+        self.assertEqual(self.commit(job['id'])[0], 202)
+        self.assertEqual(self.wait(job['id'])['state'], 'complete')
+        _, result = self.request('/api/due-swaps?country=Kenya&start=2040-01-01&group=paid')
+        self.assertEqual(result['summary']['pending_count'], 0)
+        self.assertEqual(result['summary']['paid_count'], 1)
+        self.assertEqual(result['summary']['resolved_count'], 1)
+        self.assertEqual(result['summary']['needs_review_count'], 0)
+        self.assertEqual(len(result['page']['records']), 1)
+        _, inventory = self.request('/api/sources')
+        self.assertIn('due', {r['dataset'] for r in inventory['sources']})
+
     def test_database_failure_rolls_back_whole_file_and_audit(self):
         with psycopg.connect(**self.settings, autocommit=True) as conn:
             conn.execute("ALTER TABLE reconciliation.wallets ADD CONSTRAINT selfservice_test_reject CHECK (zoho_record_id <> 'selfservice-test-blocked') NOT VALID")
@@ -177,6 +236,19 @@ class UploadIntegrationTests(unittest.TestCase):
                 self.assertEqual(conn.execute("SELECT count(*) FROM reconciliation.import_batches WHERE source_file='selfservice-test-rollback.csv'").fetchone()[0], 0)
             finally:
                 conn.execute('ALTER TABLE reconciliation.wallets DROP CONSTRAINT selfservice_test_reject')
+
+    def test_cache_refresh_failure_keeps_committed_import_and_retries_on_read(self):
+        record = {'Record Id': 'selfservice-test-cache-retry', 'Country': 'Kenya', 'Currency': 'KES'}
+        job = self.upload(csv_bytes(records=[record]), 'selfservice-test-cache-retry.csv')
+        with patch('app.import_service.refresh_cache', side_effect=psycopg.OperationalError('Fixture refresh failure')):
+            self.assertEqual(self.commit(job['id'])[0], 202)
+            imported = self.wait(job['id'])
+            self.assertEqual(imported['state'], 'complete_with_warnings')
+        self.assertEqual(imported['result']['rows_applied'], 1)
+        self.assertIn('was imported', imported['warning'])
+        with psycopg.connect(**self.settings) as conn:
+            self.assertEqual(conn.execute("SELECT count(*) FROM reconciliation.wallets WHERE zoho_record_id='selfservice-test-cache-retry'").fetchone()[0], 1)
+        self.assertEqual(self.request('/api/dashboard?country=Kenya')[0], 200)
 
 
 if __name__ == '__main__': unittest.main()

@@ -125,18 +125,18 @@ SELECT COUNT(*) FROM wallet_transactions
 
 ### Find Missing in Wallet
 ```sql
-SELECT a.* 
+SELECT a.*
 FROM atlas_transactions a
-LEFT JOIN wallet_transactions w 
+LEFT JOIN wallet_transactions w
     ON a."Payment Transaction No" = w."Payment Transaction No"
 WHERE w."Payment Transaction No" IS NULL
 ```
 
 ### Find Missing in Atlas
 ```sql
-SELECT w.* 
+SELECT w.*
 FROM wallet_transactions w
-LEFT JOIN atlas_transactions a 
+LEFT JOIN atlas_transactions a
     ON w."Payment Transaction No" = a."Payment Transaction No"
 WHERE a."Payment Transaction No" IS NULL
 ```
@@ -177,7 +177,7 @@ def get_missing_transactions(limit=50, offset=0):  # Change 50 to your preferred
 Make sure both `atlas_transactions` and `wallet_transactions` tables exist in the database:
 
 ```sql
-SELECT table_name FROM information_schema.tables 
+SELECT table_name FROM information_schema.tables
 WHERE table_name IN ('atlas_transactions', 'wallet_transactions');
 ```
 

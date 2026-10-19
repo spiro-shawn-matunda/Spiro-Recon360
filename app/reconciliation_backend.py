@@ -7,6 +7,16 @@ in Python. No balances, ledger records, or refunds are changed by this module.
 from dataclasses import dataclass
 from datetime import date, datetime, time
 from decimal import Decimal
+import re
+
+RECORD_ID_PATTERN = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.:-]{0,179}\Z')
+
+
+def validate_record_id(value):
+    """Accept exported Zoho IDs and existing synthetic/local source IDs."""
+    if not isinstance(value, str) or not RECORD_ID_PATTERN.fullmatch(value):
+        raise ValueError('Record Id must be 1-180 letters, digits, underscores, dots, colons or hyphens, starting with a letter or digit.')
+    return value
 
 COUNTRIES = ("Kenya", "Rwanda")
 STATUSES = (
@@ -144,8 +154,7 @@ class ReconciliationBackend:
         if review_only:
             conditions.append("r.needs_review")
         if after_record_id is not None:
-            if not isinstance(after_record_id, str) or not after_record_id.strip():
-                raise ValueError("The cursor must be a nonblank source wallet Record Id.")
+            validate_record_id(after_record_id)
             conditions.append("r.wallet_record_id > %s")
             params.append(after_record_id)
         params.append(limit + 1)
@@ -157,8 +166,7 @@ class ReconciliationBackend:
                 "next_cursor": records[-1]["wallet_record_id"] if has_more else None}
 
     def get_record(self, wallet_record_id, *, country=None):
-        if not isinstance(wallet_record_id, str) or not wallet_record_id.strip():
-            raise ValueError("Provide a source wallet transaction Record Id.")
+        validate_record_id(wallet_record_id)
         conditions, params = _conditions(ReconciliationFilter(country=country))
         if self.cached:
             conditions.append('r.wallet_record_id = %s')
@@ -167,19 +175,27 @@ class ReconciliationBackend:
             return rows[0] if rows else None
         # Restrict the complete reference partition, preserving duplicate checks
         # while avoiding a whole-country window scan for one detail request.
-        target = self.conn.execute('''SELECT country, transaction_id
-            FROM reconciliation.wallet_transactions WHERE zoho_record_id = %s
-              AND transaction_type='Debit' AND status='Committed' AND settled_against='Swap' ''',
-            (wallet_record_id,)).fetchone()
-        if target is None or (country is not None and target[0] != country):
-            return None
-        for column, value in (("country", target[0]), ("transaction_id", target[1])):
-            if value is None:
-                conditions.append(f"r.{column} IS NULL")
-            else:
-                conditions.append(f"r.{column} = %s")
-                params.append(value)
         conditions.append("r.wallet_record_id = %s")
         params.append(wallet_record_id)
-        rows = _rows(self.conn, f"SELECT {DETAIL_FIELDS} FROM {self.view} r{_where(conditions)}", params)
+        # Separate NULL partitions so normal reference lookups keep indexable
+        # equality predicates. EXISTS gates prevent scanning inactive branches.
+        branches = []
+        country_states = (None,) if country is not None else (False, True)
+        for country_null in country_states:
+            for transaction_null in (False, True):
+                selected = list(conditions)
+                guards = ['transaction_id IS NULL' if transaction_null else 'transaction_id IS NOT NULL']
+                if country_null is not None:
+                    selected.append('r.country IS NULL' if country_null else 'r.country = (SELECT country FROM target)')
+                    guards.append('country IS NULL' if country_null else 'country IS NOT NULL')
+                selected.append('r.transaction_id IS NULL' if transaction_null else
+                                'r.transaction_id = (SELECT transaction_id FROM target)')
+                selected.append('EXISTS (SELECT 1 FROM target WHERE ' + ' AND '.join(guards) + ')')
+                branches.append(f'SELECT {DETAIL_FIELDS} FROM {self.view} r{_where(selected)}')
+        statement = """WITH target AS MATERIALIZED (
+            SELECT country, transaction_id FROM reconciliation.wallet_transactions
+            WHERE zoho_record_id = %s AND transaction_type='Debit'
+              AND status='Committed' AND settled_against='Swap'
+        ) """ + ' UNION ALL '.join(branches)
+        rows = _rows(self.conn, statement, [wallet_record_id, *(params * len(branches))])
         return rows[0] if rows else None

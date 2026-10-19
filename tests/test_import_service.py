@@ -243,7 +243,7 @@ class UploadIntegrationTests(unittest.TestCase):
         with patch('app.import_service.refresh_cache', side_effect=psycopg.OperationalError('Fixture refresh failure')):
             self.assertEqual(self.commit(job['id'])[0], 202)
             imported = self.wait(job['id'])
-        self.assertEqual(imported['state'], 'complete')
+            self.assertEqual(imported['state'], 'complete_with_warnings')
         self.assertEqual(imported['result']['rows_applied'], 1)
         self.assertIn('was imported', imported['warning'])
         with psycopg.connect(**self.settings) as conn:

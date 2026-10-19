@@ -63,6 +63,18 @@ python main.py --export-review --country Rwanda
 
 Report options: `--country`, `--start`, `--end`, `--output`; review reports also accept `--status`. The existing `--import-config` and `--dry-run` options remain available through `main.py` for configured local files. The server currently accepts local connections only.
 
+## Review safeguards
+
+Imports distinguish `complete` from `complete_with_warnings`. Statistics or dashboard-cache refresh failures are logged and shown on the file card; committed records stay imported. Failed imports report rollback only when the file did not commit. Database request errors include safe, actionable messages while the application logs retain the traceback, route and SQLSTATE.
+
+Abandoned upload reservations expire after 15 minutes, inactive finished/validated sessions after one hour, and queued/running validation or imports after four hours. Cleanup runs every 30 seconds and on job operations. Running jobs keep their files until their worker stops; expired workers are cancelled cooperatively and active database queries receive a cancellation request. Imports have a four-hour statement timeout and a two-minute lock timeout. Upload reads allow two minutes of inactivity and reset that timeout as bytes arrive. Status polling retries transient failures up to five times with backoff; upload and commit POSTs are never retried automatically.
+
+API requests accept at most ten query parameters, reject repeated/unknown parameters, and validate Record Ids/cursors as 1–180 letters, digits, underscores, dots, colons or hyphens, starting with a letter or digit. Source Record Ids use the same validation on import. Cursor values remain exact source IDs and are SQL parameters; they are not authentication tokens.
+
+CSV exports escape formula-like source strings across all report paths. Known amount strings remain numeric only after finite decimal validation. Validation and `--dry-run` flag negative values, zero transaction amounts, monetary values of at least one billion source units and monetary precision beyond two decimal places. These are review warnings, not approved currency-specific business rules; values are preserved exactly. Non-finite values and values outside PostgreSQL numeric storage limits are rejected. Zero-charge offers, paid Dues and negative ledger balances can be legitimate and remain importable.
+
+See `code_review_resolution.md` for the disposition of each GitHub finding.
+
 ## Tests
 
 Run `python -m unittest discover -s tests -v` for unit tests; integration tests require an explicit `SPIRO_TEST_DSN` and never read `.env`. For the full suite, create a **new empty disposable PostgreSQL database**, set `SPIRO_TEST_DSN` to its connection string, and run `python tests/run.py`. The runner creates synthetic fixtures and refuses a database that already has user tables.

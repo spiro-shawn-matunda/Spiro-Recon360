@@ -5,7 +5,7 @@ import json
 from datetime import datetime, time
 
 from .missing_counterparts import csv_value
-from .reconciliation_backend import ReconciliationFilter, serialize
+from .reconciliation_backend import ReconciliationFilter, serialize, validate_record_id
 
 GROUPS = {'all': 'true', 'resolved': "r.resolution_status='resolved_offer'",
           'needs_review': "r.resolution_status='needs_review'",
@@ -37,8 +37,7 @@ def query(filters=None, *, group='all', cursor=None):
             clauses.append('s.' + column + ('=%s' if column == 'country' else ' %s'))
             values.append(value)
     if cursor is not None:
-        if not isinstance(cursor, str) or not cursor.strip():
-            raise ValueError('Provide a nonblank source Record Id cursor.')
+        validate_record_id(cursor)
         clauses.append('s.zoho_record_id>%s'); values.append(cursor)
     predicate = selection(group)
     statement = '''WITH budgets AS MATERIALIZED (

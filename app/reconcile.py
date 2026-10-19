@@ -9,6 +9,7 @@ from pathlib import Path
 import psycopg
 from .db_config import read_database_config
 from .reconciliation_backend import COUNTRIES, STATUSES, ReconciliationBackend, ReconciliationFilter
+from .csv_safety import csv_value
 
 from . import PROJECT_ROOT
 
@@ -49,10 +50,9 @@ def write_report(conn, filters, output_directory):
                 while True:
                     page = backend.list_records(filters, review_only=True, limit=1000, after_record_id=cursor)
                     for record in page["records"]:
-                        row = {field: record.get(field) for field in EXPORT_FIELDS}
-                        for field, value in row.items():
-                            if isinstance(value, list):
-                                row[field] = json.dumps(value, ensure_ascii=False)
+                        row = {field: csv_value(field, record.get(field),
+                                               numeric=field in ('wallet_amount', 'successful_swap_amount'))
+                               for field in EXPORT_FIELDS}
                         writer.writerow(row)
                         report["candidate_count"] += 1
                     if not page["has_more"]:

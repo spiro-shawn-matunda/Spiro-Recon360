@@ -12,6 +12,7 @@ from collections import Counter
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from .reconciliation_backend import validate_record_id
 
 COMMON = [('zoho_record_id', 'Record Id', 'required'), ('transaction_id', 'Transaction ID', 'text'),
           ('source_record_id', 'RecordID', 'text'), ('country', 'Country', 'text'),
@@ -112,10 +113,15 @@ def parse_value(value, kind, field):
     if not value or not value.strip():
         if kind == 'required': raise ValueError(f'Missing required {field}')
         return None
-    if kind in ('text', 'required'): return value
+    if kind in ('text', 'required'):
+        if kind == 'required' and field == 'Record Id':
+            validate_record_id(value)
+        return value
     if kind == 'decimal':
         result = Decimal(value)
         if not result.is_finite(): raise ValueError(f'Non-finite decimal in {field}')
+        if result.adjusted() >= 131072 or result.as_tuple().exponent < -16383:
+            raise ValueError(f'{field} exceeds PostgreSQL numeric storage limits')
         return result
     if kind == 'date': return date.fromisoformat(value)
     if kind == 'timestamp':
@@ -124,6 +130,30 @@ def parse_value(value, kind, field):
             raise ValueError(f'{field} has a timezone offset; these tables are for naive CSV timestamps')
         return result
     raise ValueError(f'Unknown field type {kind}')
+
+
+def numeric_warnings(row, dataset):
+    """Flag suspicious source values for review without inventing ledger rules."""
+    warnings = Counter()
+    for column, _, kind in MAPS[dataset]:
+        value = row.get(column)
+        if kind != 'decimal' or value is None:
+            continue
+        money = not column.endswith('_soc')
+        if value < 0:
+            warnings['negative_amount' if money else 'negative_soc'] += 1
+        if money and abs(value) >= Decimal('1000000000'):
+            warnings['amount_at_least_one_billion_source_units'] += 1
+        digits = list(value.as_tuple().digits)
+        exponent = value.as_tuple().exponent
+        while digits and digits[-1] == 0:
+            digits.pop()
+            exponent += 1
+        if money and digits and exponent < -2:
+            warnings['amount_with_more_than_two_decimal_places'] += 1
+        if column in ('amount', 'swap_amount', 'due_amount') and value == 0:
+            warnings['zero_transaction_amount'] += 1
+    return warnings
 
 def read_rows(path, dataset):
     mapping = MAPS[dataset]
@@ -147,8 +177,10 @@ def dry_run(path, dataset):
     n = 0; ids = set(); txids = set(); duplicates = 0; duplicate_txids = 0
     missing_txids = 0; statuses = Counter(); minimum = maximum = None
     amount_total = Decimal(0)
+    warnings = Counter()
     for row in read_rows(path, dataset):
         n += 1
+        warnings.update(numeric_warnings(row, dataset))
         key = row['zoho_record_id']
         if key in ids: duplicates += 1
         ids.add(key)
@@ -169,7 +201,8 @@ def dry_run(path, dataset):
         'missing_transaction_ids': missing_txids, 'duplicate_transaction_id_rows': duplicate_txids,
         'statuses': dict(statuses), 'min_created_on': str(minimum), 'max_created_on': str(maximum),
         'amount_field': amount_field,
-        'amount_total_in_source_units': str(amount_total)}, indent=2))
+        'amount_total_in_source_units': str(amount_total),
+        'numeric_warnings': dict(warnings)}, indent=2))
 
 def import_file(conn, path, dataset, sql, *, progress=None):
     columns = [col for col, _, _ in MAPS[dataset]] + ['source_file', 'source_row_number', 'raw_record']

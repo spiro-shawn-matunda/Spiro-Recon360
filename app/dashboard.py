@@ -3,20 +3,21 @@ import argparse
 import csv
 import io
 import json
+import logging
 import secrets
 import socket
 import sys
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
 from urllib.parse import parse_qs, urlsplit, unquote
 
 import psycopg
 from .db_config import read_database_config
 from .reconcile import EXPORT_FIELDS
-from .reconciliation_backend import ReconciliationBackend, ReconciliationFilter
-from .import_service import ImportJobs, MAX_UPLOAD_BYTES, source_inventory
+from .reconciliation_backend import ReconciliationBackend, ReconciliationFilter, validate_record_id
+from .csv_safety import csv_value
+from .import_service import ImportJobs, MAX_UPLOAD_BYTES, SESSION_EXPIRED_ERROR, source_inventory
 from . import counterpart_tracking, due_tracking, offer_tracking
 from .dashboard_cache import cache_ready, ensure_cache
 
@@ -24,6 +25,9 @@ from . import PROJECT_ROOT
 
 WEB = PROJECT_ROOT / "web"
 MAX_EXPORT_RECORDS = 10000
+MAX_QUERY_FIELDS = 10
+UPLOAD_IDLE_TIMEOUT = 120
+LOGGER = logging.getLogger(__name__)
 STATIC = {"/": "index.html", "/styles.css": "styles.css", "/app.js": "app.js", "/favicon.svg": "favicon.svg"}
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml"}
 
@@ -38,10 +42,17 @@ class DashboardServer(ThreadingHTTPServer):
         super().server_bind()
 
     def __init__(self, address, database_settings):
+        missing = [name for name in STATIC.values() if not (WEB / name).is_file()]
+        if missing:
+            raise ValueError('Dashboard assets are missing: ' + ', '.join(missing))
         self.database_settings = database_settings
         self.csrf_token = secrets.token_urlsafe(32)
         self.imports = ImportJobs(database_settings)
-        super().__init__(address, DashboardHandler)
+        try:
+            super().__init__(address, DashboardHandler)
+        except Exception:
+            self.imports.close()
+            raise
 
     def server_close(self):
         super().server_close()
@@ -59,7 +70,10 @@ def snapshot(settings):
 
 
 def query_options(query, allowed):
-    values = parse_qs(query, keep_blank_values=True, max_num_fields=10)
+    try:
+        values = parse_qs(query, keep_blank_values=True, max_num_fields=MAX_QUERY_FIELDS)
+    except ValueError:
+        raise ValueError(f'Use at most {MAX_QUERY_FIELDS} query parameters.') from None
     if set(values) - allowed or any(len(items) != 1 for items in values.values()):
         raise ValueError("Unknown or repeated query parameter.")
     values = {key: items[0] for key, items in values.items()}
@@ -76,6 +90,8 @@ def query_options(query, allowed):
         raise ValueError("Page size must be an integer.") from None
     if not 1 <= limit <= 100:
         raise ValueError("Dashboard page size must be between 1 and 100.")
+    if 'cursor' in values:
+        validate_record_id(values['cursor'])
     return filters, review == "true", limit, values.get("cursor") or None, values
 
 
@@ -125,12 +141,9 @@ def export_candidates(backend, filters):
             count += 1
             if count > MAX_EXPORT_RECORDS:
                 raise ValueError("More than 10,000 candidates. Narrow the country or date filters before exporting.")
-            row = {field: record.get(field) for field in EXPORT_FIELDS}
-            for field, value in row.items():
-                if isinstance(value, list):
-                    row[field] = json.dumps(value, ensure_ascii=False)
-                elif isinstance(value, str) and field not in ("wallet_amount", "successful_swap_amount") and value.startswith(("=", "+", "-", "@", "\t", "\r")):
-                    row[field] = "'" + value
+            row = {field: csv_value(field, record.get(field),
+                                   numeric=field in ('wallet_amount', 'successful_swap_amount'))
+                   for field in EXPORT_FIELDS}
             writer.writerow(row)
         if not page["has_more"]:
             break
@@ -139,6 +152,21 @@ def export_candidates(backend, filters):
 
 
 class DashboardHandler(BaseHTTPRequestHandler):
+    def database_error(self, exc):
+        LOGGER.exception('Database failure method=%s route=%s sqlstate=%s',
+                         self.command, urlsplit(self.path).path, exc.sqlstate)
+        if isinstance(exc, psycopg.errors.QueryCanceled):
+            message = 'The database query timed out. Narrow the country or date filters and retry.'
+        elif isinstance(exc, psycopg.errors.InsufficientPrivilege):
+            message = 'The database user cannot read the reconciliation data. Check database permissions.'
+        elif isinstance(exc, (psycopg.errors.DeadlockDetected, psycopg.errors.SerializationFailure)):
+            message = 'The database is busy with another update. Retry this request.'
+        elif isinstance(exc, psycopg.OperationalError):
+            message = 'The database connection is unavailable. Check PostgreSQL and the project connection settings.'
+        else:
+            message = 'The database could not be queried. Check the application logs for details.'
+        self.json(503, {'error': message})
+
     def log_message(self, format, *args):
         print(f"Dashboard {self.command} {urlsplit(self.path).path}: {args[1] if len(args)>1 else ''}", flush=True)
 
@@ -179,7 +207,13 @@ class DashboardHandler(BaseHTTPRequestHandler):
         parsed = urlsplit(self.path)
         if parsed.path in STATIC:
             path = WEB / STATIC[parsed.path]
-            self.respond(200, path.read_bytes(), MIME[path.suffix])
+            try:
+                body = path.read_bytes()
+            except OSError:
+                LOGGER.exception('Dashboard asset could not be read: %s', path.name)
+                self.json(503, {'error': 'Dashboard files are unavailable. Restore the web folder and restart main.py.'})
+                return
+            self.respond(200, body, MIME[path.suffix])
             return
         common = {"country", "start", "end", "status"}
         try:
@@ -279,9 +313,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
         except ValueError as exc:
             self.json(400, {"error": str(exc)})
         except KeyError:
-            self.json(404, {'error': 'File session expired. Choose the file again.'})
-        except psycopg.Error:
-            self.json(503, {"error": "The database could not be queried. Check your project connection and restart main.py if needed."})
+            self.json(404, {'error': SESSION_EXPIRED_ERROR})
+        except psycopg.Error as exc:
+            self.database_error(exc)
         except (BrokenPipeError, ConnectionResetError):
             pass
 
@@ -293,6 +327,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.json(405, {'error': 'Only CSV upload and import actions accept POST requests.'})
             return
         if not secrets.compare_digest(self.headers.get('X-Spiro-Token', '').encode('utf-8'), self.server.csrf_token.encode('utf-8')):
+            self.close_connection = True
             self.json(403, {'error': 'Refresh the dashboard before importing files.'})
             return
         key = None
@@ -310,16 +345,18 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     return
                 key, target = self.server.imports.reserve(unquote(self.headers.get('X-Filename', '')))
                 original_timeout = self.connection.gettimeout()
-                self.connection.settimeout(60)
+                self.connection.settimeout(UPLOAD_IDLE_TIMEOUT)
                 try:
                     with target.open('wb') as output:
                         remaining = size
                         while remaining:
-                            chunk = self.rfile.read(min(1024 * 1024, remaining))
+                            # read1 returns available bytes so each chunk resets the idle timeout.
+                            chunk = self.rfile.read1(min(1024 * 1024, remaining))
                             if not chunk:
                                 raise ValueError('Upload was interrupted. Choose the file again.')
                             output.write(chunk)
                             remaining -= len(chunk)
+                            self.server.imports.update(key, received_bytes=size-remaining)
                 finally:
                     self.connection.settimeout(original_timeout)
                 self.server.imports.validate(key)
@@ -340,7 +377,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.close_connection = True
             self.json(400, {'error': str(exc)})
         except KeyError:
-            self.json(404, {'error': 'File session expired. Choose the file again.'})
+            self.json(404, {'error': SESSION_EXPIRED_ERROR})
         except (OSError, TimeoutError):
             if key:
                 self.server.imports.abort(key)

@@ -4,7 +4,7 @@ import io
 from datetime import datetime, time
 
 from .missing_counterparts import csv_value
-from .reconciliation_backend import ReconciliationFilter, _rows
+from .reconciliation_backend import ReconciliationFilter, _rows, validate_record_id
 
 MAX_EXPORT = 10000
 GROUPS = {
@@ -51,8 +51,7 @@ def _scope(filters=None, cursor=None):
         conditions.append('s.created_on <= %s')
         values.append(datetime.combine(filters.end_date, time.max))
     if cursor is not None:
-        if not isinstance(cursor, str) or not cursor.strip():
-            raise ValueError('The cursor must be a nonblank swap Record Id.')
+        validate_record_id(cursor)
         conditions.append('s.zoho_record_id > %s')
         values.append(cursor)
     return filters, ' AND '.join(conditions), values
@@ -233,6 +232,6 @@ def export(conn, filters=None, *, group='all'):
     writer = csv.DictWriter(stream, fieldnames=FIELDS)
     writer.writeheader()
     for record in records:
-        writer.writerow({field: record.get(field) if field in ('swap_amount', 'due_amount')
-                         else csv_value(field, record.get(field)) for field in FIELDS})
+        writer.writerow({field: csv_value(field, record.get(field), numeric=field in ('swap_amount', 'due_amount'))
+                         for field in FIELDS})
     return ('\ufeff' + stream.getvalue()).encode('utf-8')

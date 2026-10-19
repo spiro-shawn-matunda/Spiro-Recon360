@@ -8,7 +8,8 @@ from pathlib import Path
 
 import psycopg
 from .db_config import read_database_config
-from .reconciliation_backend import COUNTRIES, ReconciliationFilter
+from .reconciliation_backend import COUNTRIES, ReconciliationFilter, validate_record_id
+from .csv_safety import csv_value
 
 from . import PROJECT_ROOT
 
@@ -143,8 +144,7 @@ def report_query(group, filters, *, classification=None, cursor=None, order='cou
     elif classification is not None:
         raise ValueError('Unknown identifier classification.')
     if cursor is not None:
-        if not isinstance(cursor, str) or not cursor.strip():
-            raise ValueError('Provide a nonblank source Record Id cursor.')
+        validate_record_id(cursor)
         clauses.append(f'{alias}.{record} > %s'); values.append(cursor)
     if record_ids is not None:
         clauses.append(f'{alias}.{record} = ANY(%s)'); values.append(record_ids)
@@ -176,18 +176,6 @@ def report_query(group, filters, *, classification=None, cursor=None, order='cou
         statement = ('WITH swap_resolutions AS MATERIALIZED (' + resolution_query()
                      + ') SELECT * FROM (' + statement + ') open_swaps')
     return statement, values
-
-
-def csv_value(field, value):
-    if isinstance(value, (list, tuple)):
-        return json.dumps(value, ensure_ascii=False)
-    if isinstance(value, (datetime,)):
-        return value.isoformat()
-    # Protect formula-like source text when a report is opened in a spreadsheet.
-    # Decimal amounts remain exact numeric strings; identifiers never become floats.
-    if isinstance(value, str) and value.startswith(('=', '+', '-', '@', '\t', '\r')):
-        return "'" + value
-    return value
 
 
 def write_missing_reports(conn, output=None, filters=None):

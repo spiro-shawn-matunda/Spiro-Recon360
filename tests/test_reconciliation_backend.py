@@ -65,7 +65,8 @@ class BackendIntegrationTests(unittest.TestCase):
             self.assertEqual(row['wallet_currency'],currency)
             self.assertEqual(row['wallet_amount'],'120.10')
         self.assertIsNone(self.backend.get_record('shared_ke',country='Rwanda'))
-        self.assertIsNone(self.backend.get_record("x' OR true --"))
+        with self.assertRaises(ValueError):
+            self.backend.get_record("x' OR true --")
 
     def test_date_filter_does_not_hide_duplicate_outside_selected_day(self):
         selected=self.backend.list_records(ReconciliationFilter(country='Kenya',start_date='2026-09-23',end_date='2026-09-23'),limit=100)

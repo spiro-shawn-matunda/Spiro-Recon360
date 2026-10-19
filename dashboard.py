@@ -18,6 +18,7 @@ from reconciliation_backend import ReconciliationBackend, ReconciliationFilter
 from import_service import ImportJobs, MAX_UPLOAD_BYTES, source_inventory
 import payments_import_service
 import swap_import_service
+import due_import_service
 
 WEB = Path(__file__).resolve().parent / "dashboard_ui"
 MAX_EXPORT_RECORDS = 10000
@@ -53,6 +54,9 @@ class DashboardServer(ThreadingHTTPServer):
         self.swap_imports = ImportJobs(database_settings,
             inspector=swap_import_service.inspect_csv, importer=swap_import_service.import_file,
             schema=swap_import_service.SCHEMA, tables=swap_import_service.TABLES)
+        self.due_imports = ImportJobs(database_settings,
+            inspector=due_import_service.inspect_csv, importer=due_import_service.import_file,
+            schema=due_import_service.SCHEMA, tables=due_import_service.TABLES)
         super().__init__(address, DashboardHandler)
 
     def server_close(self):
@@ -60,6 +64,7 @@ class DashboardServer(ThreadingHTTPServer):
         self.imports.close()
         self.payment_imports.close()
         self.swap_imports.close()
+        self.due_imports.close()
 
 
 @contextmanager
@@ -163,6 +168,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
         try:
             if parsed.path == '/api/session':
                 self.json(200, {'csrf_token': self.server.csrf_token, 'max_upload_bytes': MAX_UPLOAD_BYTES})
+            elif parsed.path == '/api/due-sources':
+                self.json(200, due_import_service.source_inventory(self.server.database_settings))
+            elif parsed.path.startswith('/api/due-import-jobs/'):
+                key = parsed.path.removeprefix('/api/due-import-jobs/')
+                self.json(200, self.server.due_imports.status(key))
+            elif parsed.path in ('/api/payments-due', '/api/payments-due-export'):
+                from payments_due_reconciliation import get_dashboard, export_missing
+                options = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=3)
+                allowed = {'country'} if parsed.path.endswith('-export') else {'country','page'}
+                if set(options) - allowed or any(len(items) != 1 for items in options.values()):
+                    raise ValueError('Unknown or repeated Due query parameter.')
+                country = options.get('country',[''])[0]
+                if parsed.path.endswith('-export'):
+                    self.respond(200, export_missing(self.server.database_settings,country),
+                        'text/csv; charset=utf-8', filename='uganda_payments_without_due.csv')
+                else:
+                    page = int(options.get('page',['0'])[0])
+                    self.json(200,get_dashboard(self.server.database_settings,country,page))
             elif parsed.path == '/api/swap-sources':
                 self.json(200, swap_import_service.source_inventory(self.server.database_settings))
             elif parsed.path.startswith('/api/swap-import-jobs/'):
@@ -237,7 +260,10 @@ class DashboardHandler(BaseHTTPRequestHandler):
             return
         path = urlsplit(self.path).path
         imports = self.server.imports
-        if path == '/api/swap-uploads' or path.startswith('/api/swap-import-jobs/'):
+        if path == '/api/due-uploads' or path.startswith('/api/due-import-jobs/'):
+            imports = self.server.due_imports
+            path = path.replace('/api/due-', '/api/', 1)
+        elif path == '/api/swap-uploads' or path.startswith('/api/swap-import-jobs/'):
             imports = self.server.swap_imports
             path = path.replace('/api/swap-', '/api/', 1)
         elif path == '/api/payments-uploads' or path.startswith('/api/payments-import-jobs/'):

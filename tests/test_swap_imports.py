@@ -12,6 +12,7 @@ from payments_swap_reconciliation import SUMMARY_SQL
 
 
 def write_csv(folder,rows,name='payments.csv'):
+    rows=[dict(row,**{'Payment Status':'Paid'}) if 'Atlas Transaction ID' in row and 'Payment Status' not in row else row for row in rows]
     path=Path(folder)/name
     with path.open('w',encoding='utf-8',newline='') as stream:
         writer=csv.DictWriter(stream,fieldnames=list(rows[0]))
@@ -35,6 +36,14 @@ class SwapCsvValidationTests(unittest.TestCase):
                 with self.subTest(row=row),self.assertRaises(ValueError):service.inspect_csv(write_csv(folder,[row]))
             with self.assertRaises(ValueError):service.layout(['Record Id','Atlas Transaction ID','Transaction ID','Pay Method'])
             with self.assertRaises(ValueError):service.layout(['Record Id','Reference','Transaction ID'])
+
+    def test_payment_csv_requires_status_and_keeps_failed_rows_for_source_history(self):
+        with self.assertRaisesRegex(ValueError,'Payment Status'):
+            service.layout(['Record Id','Atlas Transaction ID'])
+        with TemporaryDirectory() as folder:
+            path=write_csv(folder,[{'Record Id':'p1','Atlas Transaction ID':'001','Payment Status':'Failed'}])
+            self.assertEqual(service.inspect_csv(path)['rows'],1)
+            self.assertEqual(next(service.read_rows(path))[1]['Payment Status'],'Failed')
 
     def test_ambiguous_column_mapping_is_rejected(self):
         with self.assertRaises(ValueError):

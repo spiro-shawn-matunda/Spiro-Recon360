@@ -18,7 +18,7 @@ COMMON = {'record_id': 'required', 'country': 'text', 'amount': 'decimal',
 FIELDS = {
     'atlas': {**COMMON, 'atlas_transaction_id': 'text', 'payment_transaction_no': 'text',
               'customer_name': 'text', 'currency': 'text', 'payment_status': 'text',
-              'payment_operator': 'text', 'transaction_date': 'timestamp', 'settled_against': 'text'},
+              'payment_operator': 'text', 'transaction_date': 'timestamp', 'settled_against': 'text', 'remarks': 'text'},
     'wallet': {**COMMON, 'reference': 'text', 'transaction_id': 'text', 'wallet_id': 'text',
                'type': 'text', 'status': 'text', 'settled_against': 'text'},
 }
@@ -39,8 +39,14 @@ def layout(headers):
     if len(datasets) != 1 or 'record_id' not in normalized:
         raise ValueError('Choose an Atlas Payments export with Record Id and Atlas Transaction ID, or a Wallet Transactions export with Record Id, Reference and Transaction ID. Database-style headers are also accepted.')
     dataset = datasets[0]
-    if 'settled_against' not in normalized:
-        raise ValueError('Include the Settled Against column in the CSV export. This page compares only Wallet Recharge transactions.')
+    if dataset == 'atlas' and 'remarks' not in normalized:
+        raise ValueError('Include the Remarks column in the Atlas payment CSV export. Only payments with Remarks = Wallet Recharge are compared.')
+    if dataset == 'atlas' and 'payment_status' not in normalized:
+        raise ValueError('Include the Payment Status column in the Atlas payment CSV export. Only Paid payments are compared.')
+    if dataset == 'wallet' and 'settled_against' not in normalized:
+        raise ValueError('Include the Settled Against column in the wallet CSV export. Only Credit Wallet Recharge entries are compared.')
+    if dataset == 'wallet' and 'type' not in normalized:
+        raise ValueError('Include the Type column in the wallet CSV export. Only Credit Wallet Recharge entries are compared.')
     mapping = {}
     for header, name in zip(headers, normalized):
         if name not in FIELDS[dataset]:

@@ -29,6 +29,8 @@ def layout(headers):
     if {'record_id', 'transaction_id', 'pay_method'} <= set(normalized): matches.append('swap')
     if len(matches) != 1:
         raise ValueError('Choose a payment export with Record Id and Atlas Transaction ID, or a swap export with Record Id, Transaction ID and Pay Method.')
+    if matches[0] == 'swap_payments' and 'payment_status' not in normalized:
+        raise ValueError('Include Payment Status in the payment CSV. Only Paid payments are reconciled.')
     return matches[0]
 
 

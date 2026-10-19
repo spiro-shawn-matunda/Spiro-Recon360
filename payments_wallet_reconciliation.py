@@ -7,13 +7,14 @@ import psycopg
 
 # A wallet reference identifies the Atlas payment; transaction_id identifies
 # the wallet entry and must be present. Count payment rows, never joined rows.
-ATLAS_SCOPE = "a.settled_against = 'Wallet Recharge'"
+ATLAS_SCOPE = "a.remarks = 'Wallet Recharge' AND a.payment_status = 'Paid'"
+WALLET_SCOPE = "w.settled_against = 'Wallet Recharge' AND w.type = 'Credit'"
 
-MATCH_EXISTS = """
+MATCH_EXISTS = f"""
     EXISTS (
         SELECT 1 FROM payments_reconciliation.wallet_transactions w
         WHERE w.reference = a.atlas_transaction_id
-          AND w.settled_against = 'Wallet Recharge'
+          AND {WALLET_SCOPE}
           AND NULLIF(BTRIM(a.atlas_transaction_id), '') IS NOT NULL
           AND NULLIF(BTRIM(w.transaction_id), '') IS NOT NULL
     )
@@ -22,8 +23,8 @@ MATCH_EXISTS = """
 SUMMARY_SQL = f"""
     SELECT COUNT(*) AS atlas_total,
            COUNT(*) FILTER (WHERE {MATCH_EXISTS}) AS matched,
-           (SELECT COUNT(*) FROM payments_reconciliation.wallet_transactions
-            WHERE settled_against = 'Wallet Recharge') AS wallet_total
+           (SELECT COUNT(*) FROM payments_reconciliation.wallet_transactions w
+            WHERE {WALLET_SCOPE}) AS wallet_total
     FROM payments_reconciliation.atlas_transactions a
     WHERE {ATLAS_SCOPE}
 """
@@ -45,7 +46,7 @@ MISSING_SQL = f"""
 
 
 def get_summary(settings):
-    """Count Wallet Recharge payments once, including those without an Atlas ID."""
+    """Count Paid Wallet Recharge payments once, including those without an Atlas ID."""
     with psycopg.connect(**settings) as conn:
         conn.execute('SET TRANSACTION READ ONLY')
         atlas_total, matched, wallet_total = conn.execute(SUMMARY_SQL).fetchone()
@@ -59,7 +60,7 @@ def get_summary(settings):
 
 
 def get_missing_transactions(settings, limit=50, offset=0):
-    """List Wallet Recharge payments without a qualifying Wallet Recharge entry."""
+    """List Paid Wallet Recharge payments without a qualifying Credit wallet entry."""
     if isinstance(limit, bool) or not isinstance(limit, int) or limit < 1:
         raise ValueError('limit must be a positive integer')
     if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:

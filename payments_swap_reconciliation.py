@@ -2,22 +2,25 @@
 from decimal import Decimal
 import psycopg
 
+PAYMENT_SCOPE = "p.\"Payment Status\" = 'Paid'"
+
 PAYMENT_MATCH = """
     EXISTS (SELECT 1 FROM swap_reconciliation.swap_transactions s
             WHERE s."Pay Method" = 'PAYMENT_OPERATOR'
               AND s."Transaction ID" = p."Atlas Transaction ID"
               AND NULLIF(BTRIM(p."Atlas Transaction ID"), '') IS NOT NULL)
 """
-SWAP_MATCH = """
+SWAP_MATCH = f"""
     EXISTS (SELECT 1 FROM swap_reconciliation.swap_payments p
-            WHERE p."Atlas Transaction ID" = s."Transaction ID"
+            WHERE {PAYMENT_SCOPE}
+              AND p."Atlas Transaction ID" = s."Transaction ID"
               AND NULLIF(BTRIM(s."Transaction ID"), '') IS NOT NULL)
 """
 SWAP_SCOPE = "s.\"Pay Method\" = 'PAYMENT_OPERATOR'"
 SUMMARY_SQL = f"""
-    SELECT (SELECT COUNT(*) FROM swap_reconciliation.swap_payments) AS payment_total,
+    SELECT (SELECT COUNT(*) FROM swap_reconciliation.swap_payments p WHERE {PAYMENT_SCOPE}) AS payment_total,
            (SELECT COUNT(*) FROM swap_reconciliation.swap_transactions s WHERE {SWAP_SCOPE}) AS swap_total,
-           (SELECT COUNT(*) FROM swap_reconciliation.swap_payments p WHERE {PAYMENT_MATCH}) AS matched,
+           (SELECT COUNT(*) FROM swap_reconciliation.swap_payments p WHERE {PAYMENT_SCOPE} AND {PAYMENT_MATCH}) AS matched,
            (SELECT COUNT(*) FROM swap_reconciliation.swap_transactions s WHERE {SWAP_SCOPE} AND NOT {SWAP_MATCH}) AS missing_in_payments
 """
 PAYMENT_MISSING_SQL = f"""
@@ -27,7 +30,7 @@ PAYMENT_MISSING_SQL = f"""
            p."Payment Operator" AS payment_operator, p."Transaction Date" AS transaction_date,
            CASE WHEN NULLIF(BTRIM(p."Atlas Transaction ID"), '') IS NULL
                 THEN 'missing_transaction_id' ELSE 'no_matching_operator_swap' END AS reason
-    FROM swap_reconciliation.swap_payments p WHERE NOT {PAYMENT_MATCH}
+    FROM swap_reconciliation.swap_payments p WHERE {PAYMENT_SCOPE} AND NOT {PAYMENT_MATCH}
     ORDER BY p."Record Id" NULLS LAST, p."Atlas Transaction ID" NULLS LAST,
              p."Payment Transaction No" NULLS LAST
     LIMIT %s OFFSET %s
@@ -44,7 +47,7 @@ SWAP_MISSING_SQL = f"""
              s."Battery Swapping ID" NULLS LAST
     LIMIT %s OFFSET %s
 """
-PAYMENT_MISSING_COUNT_SQL = f'SELECT COUNT(*) FROM swap_reconciliation.swap_payments p WHERE NOT {PAYMENT_MATCH}'
+PAYMENT_MISSING_COUNT_SQL = f'SELECT COUNT(*) FROM swap_reconciliation.swap_payments p WHERE {PAYMENT_SCOPE} AND NOT {PAYMENT_MATCH}'
 SWAP_MISSING_COUNT_SQL = f'SELECT COUNT(*) FROM swap_reconciliation.swap_transactions s WHERE {SWAP_SCOPE} AND NOT {SWAP_MATCH}'
 
 
@@ -60,7 +63,7 @@ def get_summary(settings):
 
 
 def get_missing_transactions(settings, limit=50, offset=0, direction='payments'):
-    """Payments without an operator swap, or operator swaps without a payment."""
+    """Paid payments without an operator swap, or operator swaps without a Paid payment."""
     if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 1000:
         raise ValueError('limit must be an integer between 1 and 1000')
     if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:

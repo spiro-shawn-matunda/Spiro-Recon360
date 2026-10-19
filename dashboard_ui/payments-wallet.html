@@ -33,7 +33,6 @@
             <div>
                 <div class="eyebrow">FINANCE OPERATIONS / PAYMENTS</div>
                 <h1>Payments vs Wallet</h1>
-                <p>Compare Atlas and wallet transactions where Settled Against is Wallet Recharge in both systems.</p>
             </div>
             <span class="workspace-tag">Spiro operations</span>
         </header>
@@ -45,7 +44,7 @@
       <div class="import-body">
         <div class="section-heading"><h2>Loaded data</h2><button type="button" class="reset" id="refresh-sources">Refresh</button></div>
         <div id="source-inventory" class="source-inventory">Loading data sources…</div>
-        <div class="upload-area"><div><h2>Add Zoho exports</h2><p>Choose Atlas Payments or Wallet Transactions CSV files. The module is detected from the column headers. Original Zoho headers and database-style headers are accepted. Include Settled Against; only Wallet Recharge rows are compared.</p></div>
+        <div class="upload-area"><div><h2>Add Zoho exports</h2><p>Choose Atlas Payments or Wallet Transactions CSV files. The module is detected from the column headers. Original Zoho headers and database-style headers are accepted. Include Remarks and Payment Status in payment exports, and Type plus Settled Against in wallet exports. Only Paid payments with Remarks = Wallet Recharge are compared against Credit Wallet Recharge entries.</p></div>
           <label for="upload-files" class="file-label">CSV files <span>Up to 10 files, 512 MB each</span></label><input id="upload-files" type="file" accept=".csv,text/csv" multiple>
           <p class="upload-hint">For exports over 200,000 rows, use date batches. Overlapping files are merged by Record Id. No balance or refund action is performed.</p>
           <div class="upload-actions"><button type="button" class="button secondary" id="validate-files" disabled>Validate files</button><button type="button" class="button primary" id="import-files" disabled>Import validated files ↗</button><button type="button" class="reset" id="clear-files" disabled>Clear</button></div>
@@ -59,12 +58,12 @@
             <article class="metric">
                 <div class="metric-top">ATLAS TOTAL</div>
                 <strong id="atlas-total">—</strong>
-                <div>Atlas Wallet Recharge payments</div>
+                <div>Paid payments with Remarks = Wallet Recharge</div>
             </article>
             <article class="metric">
                 <div class="metric-top">WALLET TOTAL</div>
                 <strong id="wallet-total">—</strong>
-                <div>Wallet Recharge transactions</div>
+                <div>Credit Wallet Recharge transactions</div>
             </article>
             <article class="metric">
                 <div class="metric-top">MATCHED <span class="green">✓</span></div>
@@ -74,7 +73,7 @@
             <article class="metric attention">
                 <div class="metric-top">MISSING <span>!</span></div>
                 <strong id="missing-in-wallet" class="status-missing">—</strong>
-                <div>Wallet Recharge payments without a wallet match</div>
+                <div>Paid payments with Remarks = Wallet Recharge without a wallet match</div>
             </article>
         </section>
 
@@ -82,7 +81,6 @@
             <div class="table-heading">
                 <div>
                     <h2>Missing in Wallet <span id="case-count" class="count-pill">—</span></h2>
-                    <p>Atlas Wallet Recharge payments with no matching Wallet Recharge entry and transaction ID in the wallet.</p>
                 </div>
             </div>
             <div class="table-scroll">

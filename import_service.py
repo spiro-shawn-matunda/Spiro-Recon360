@@ -25,7 +25,7 @@ def prepare_database(settings):
     with psycopg.connect(**settings, connect_timeout=15, autocommit=True) as conn:
         with conn.transaction():
             conn.execute('SELECT pg_advisory_xact_lock(18700)')
-            for name in ('01_create_tables.sql', '03_wallet_customer_mapping.sql', '06_backend_reconciliation.sql', '07_payments_reconciliation.sql', '08_payments_wallet_recharge.sql', '09_swap_reconciliation.sql'):
+            for name in ('01_create_tables.sql', '03_wallet_customer_mapping.sql', '06_backend_reconciliation.sql', '07_payments_reconciliation.sql', '08_payments_wallet_recharge.sql', '09_swap_reconciliation.sql', '10_due_reconciliation.sql', '11_payments_wallet_remarks.sql'):
                 conn.execute((PROJECT / 'sql' / name).read_text(encoding='utf-8'))
 
 

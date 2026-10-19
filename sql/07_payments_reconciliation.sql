@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS payments_reconciliation.atlas_transactions (
     country text,
     currency text,
     amount numeric,
+    remarks text,
     settled_against text,
     payment_status text,
     payment_operator text,
@@ -54,4 +55,4 @@ CREATE INDEX IF NOT EXISTS wallet_reference_idx
 CREATE INDEX IF NOT EXISTS wallet_transaction_id_idx
     ON payments_reconciliation.wallet_transactions (transaction_id);
 COMMENT ON SCHEMA payments_reconciliation IS
-    'Independent CSV imports for Payments vs Wallet. Only Wallet Recharge records are compared. Matching requires wallet.reference = atlas.atlas_transaction_id and a populated wallet.transaction_id.';
+    'Independent CSV imports for Payments vs Wallet. Payments require Remarks = Wallet Recharge and Payment Status = Paid. Wallet entries require Settled Against = Wallet Recharge and Type = Credit. Matching requires wallet.reference = atlas.atlas_transaction_id and a populated wallet.transaction_id.';

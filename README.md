@@ -22,6 +22,8 @@ Swap to Due shows all loaded Due records and their exported statuses separately 
 
 **Swap to Offer** tracks `OFFER_APPLIED` swaps. Exact country + `Swap Transaction ID.id` joins consumptions to swaps; `Offer Allocation ID` joins the allocation business reference. A unique one-time SOC voucher clears only a successful zero-charge swap with full non-billable SOC coverage, matching CRM and business customer IDs, matching wallet currency, valid dates and consistent voucher balances. All loaded consumption totals are checked against the allocation. Expiry conflicts, date differences, duplicate links, partial coverage, discounts and repeated-frequency offers remain open. Historical `Expired` status alone does not invalidate a valid earlier consumption. Offer Created terms are not loaded or inferred from offer names. Source records remain unchanged, and later edits can reopen cases immediately. The overview and open-swap CSV exports use the same resolution rules.
 
+The **Payments** sidebar opens Wallet, Swap and Due payment reconciliation. Each page has its own uploads and source inventory, stored separately in `payments_reconciliation`, `swap_reconciliation` and `due_reconciliation`. Startup prepares these schemas alongside the existing wallet/swap dashboard. Payment pages are served from `web/`; the existing `/dashboard_ui/payments-*.html` URLs remain available.
+
 ## Project directory
 
 ```text

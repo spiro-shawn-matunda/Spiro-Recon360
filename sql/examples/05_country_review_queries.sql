@@ -1,3 +1,4 @@
+
 -- Counts and amounts remain separate by country and source currency.
 SELECT country, count(*) AS wallets
 FROM reconciliation.wallets GROUP BY country ORDER BY country;

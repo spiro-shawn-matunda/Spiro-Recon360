@@ -36,7 +36,9 @@ def prepare_database(settings):
     with psycopg.connect(**settings, connect_timeout=15, autocommit=True) as conn:
         with conn.transaction():
             conn.execute('SELECT pg_advisory_xact_lock(18700)')
-            for name in ('schema.sql', 'wallets.sql', 'dues.sql', 'offers.sql', 'reconciliation.sql', 'tracking_indexes.sql'):
+            for name in ('schema.sql', 'wallets.sql', 'dues.sql', 'offers.sql', 'reconciliation.sql', 'tracking_indexes.sql',
+                         '07_payments_reconciliation.sql', '08_payments_wallet_recharge.sql',
+                         '09_swap_reconciliation.sql', '10_due_reconciliation.sql', '11_payments_wallet_remarks.sql'):
                 conn.execute((PROJECT / 'sql' / name).read_text(encoding='utf-8'))
             install_cache(conn)
         refresh_cache(conn)
@@ -129,8 +131,12 @@ def source_inventory(settings):
 
 
 class ImportJobs:
-    def __init__(self, settings):
+    def __init__(self, settings, *, inspector=None, importer=None, schema='reconciliation', tables=None):
         self.settings = settings
+        self.inspector = inspector
+        self.importer = importer
+        self.schema = schema
+        self.tables = tables
         self.lock = threading.RLock()
         self.jobs = {}
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='spiro-import')
@@ -271,7 +277,7 @@ class ImportJobs:
             path = self.jobs[key]['_path']
         try:
             self._progress(key, 0, 'validating')
-            preview = inspect_csv(path, lambda rows, phase: self._progress(key, rows, phase))
+            preview = (self.inspector or inspect_csv)(path, lambda rows, phase: self._progress(key, rows, phase))
             self._progress(key, preview['rows'], 'validated')
             self.update(key, _validated=True, preview=preview, processed_rows=preview['rows'])
         except (ValueError, UnicodeError, csv.Error) as exc:
@@ -306,18 +312,19 @@ class ImportJobs:
                     job['_connection'] = conn
                 conn.execute("SET statement_timeout = '4h'")
                 conn.execute("SET lock_timeout = '120s'")
-                result = import_file(conn, job['_path'], job['preview']['dataset'], sql,
+                result = (self.importer or import_file)(conn, job['_path'], job['preview']['dataset'], sql,
                                      progress=lambda rows, phase: self._progress(key, rows, phase))
                 self.update(key, phase='Refreshing dashboard results', result=result, processed_rows=result['rows_read'])
                 # The data is already committed; statistics failure must not report an import failure.
                 try:
-                    conn.execute(sql.SQL('ANALYZE {}').format(sql.Identifier('reconciliation', TABLES[job['preview']['dataset']])))
+                    conn.execute(sql.SQL('ANALYZE {}').format(sql.Identifier(self.schema, (self.tables or TABLES)[job['preview']['dataset']])))
                 except psycopg.Error:
                     LOGGER.exception('Import statistics refresh failed job=%s dataset=%s', key, job['preview']['dataset'])
                     warnings.append('The file was imported, but database statistics could not be refreshed. Check the application logs.')
                 # Import is committed. Never claim rollback if a derived refresh fails.
                 try:
-                    refresh_cache(conn)
+                    if self.schema == 'reconciliation':
+                        refresh_cache(conn)
                 except Exception:
                     LOGGER.exception('Import cache refresh failed job=%s dataset=%s', key, job['preview']['dataset'])
                     warnings.append('The file was imported. Dashboard results will retry recalculation when refreshed.')

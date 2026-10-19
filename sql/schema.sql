@@ -1,3 +1,4 @@
+
 -- Run this file in a SQL editor connected to the existing Spiro database.
 -- Source timestamps have no offset: retain their literal values until the
 -- Zoho export timezone is confirmed. Do not assume UTC or Africa/Nairobi.

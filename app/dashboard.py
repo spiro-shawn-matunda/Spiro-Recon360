@@ -21,6 +21,10 @@ from .import_service import ImportJobs, MAX_UPLOAD_BYTES, SESSION_EXPIRED_ERROR,
 from . import counterpart_tracking, due_tracking, offer_tracking
 from .dashboard_cache import cache_ready, ensure_cache
 
+import payments_import_service
+import swap_import_service
+import due_import_service
+
 from . import PROJECT_ROOT
 
 WEB = PROJECT_ROOT / "web"
@@ -28,7 +32,22 @@ MAX_EXPORT_RECORDS = 10000
 MAX_QUERY_FIELDS = 10
 UPLOAD_IDLE_TIMEOUT = 120
 LOGGER = logging.getLogger(__name__)
-STATIC = {"/": "index.html", "/styles.css": "styles.css", "/app.js": "app.js", "/favicon.svg": "favicon.svg"}
+STATIC = {
+    "/": "index.html",
+    "/styles.css": "styles.css",
+    "/app.js": "app.js",
+    "/data-imports.js": "data-imports.js",
+    "/payments-wallet.js": "payments-wallet.js",
+    "/payments-swap.js": "payments-swap.js",
+    "/payments-due.js": "payments-due.js",
+    "/payments-swap.css": "payments-swap.css",
+    "/payments-wallet.css": "payments-wallet.css",
+    "/favicon.svg": "favicon.svg",
+    "/dashboard_ui/payments-wallet.html": "payments-wallet.html",
+    "/dashboard_ui/payments-swap.html": "payments-swap.html",
+    "/dashboard_ui/payments-due.html": "payments-due.html",
+    "/dashboard_ui/reconciliation.html": "reconciliation.html"
+}
 MIME = {".html": "text/html; charset=utf-8", ".css": "text/css; charset=utf-8", ".js": "text/javascript; charset=utf-8", ".svg": "image/svg+xml"}
 
 
@@ -48,15 +67,28 @@ class DashboardServer(ThreadingHTTPServer):
         self.database_settings = database_settings
         self.csrf_token = secrets.token_urlsafe(32)
         self.imports = ImportJobs(database_settings)
+        self.payment_imports = ImportJobs(database_settings,
+            inspector=payments_import_service.inspect_csv, importer=payments_import_service.import_file,
+            schema=payments_import_service.SCHEMA, tables=payments_import_service.TABLES)
+        self.swap_imports = ImportJobs(database_settings,
+            inspector=swap_import_service.inspect_csv, importer=swap_import_service.import_file,
+            schema=swap_import_service.SCHEMA, tables=swap_import_service.TABLES)
+        self.due_imports = ImportJobs(database_settings,
+            inspector=due_import_service.inspect_csv, importer=due_import_service.import_file,
+            schema=due_import_service.SCHEMA, tables=due_import_service.TABLES)
         try:
             super().__init__(address, DashboardHandler)
         except Exception:
-            self.imports.close()
+            for manager in (self.imports, self.payment_imports, self.swap_imports, self.due_imports):
+                manager.close()
             raise
 
     def server_close(self):
         super().server_close()
         self.imports.close()
+        self.payment_imports.close()
+        self.swap_imports.close()
+        self.due_imports.close()
 
 
 @contextmanager
@@ -219,6 +251,34 @@ class DashboardHandler(BaseHTTPRequestHandler):
         try:
             if parsed.path == '/api/session':
                 self.json(200, {'csrf_token': self.server.csrf_token, 'max_upload_bytes': MAX_UPLOAD_BYTES})
+            elif parsed.path == '/api/due-sources':
+                self.json(200, due_import_service.source_inventory(self.server.database_settings))
+            elif parsed.path.startswith('/api/due-import-jobs/'):
+                key = parsed.path.removeprefix('/api/due-import-jobs/')
+                self.json(200, self.server.due_imports.status(key))
+            elif parsed.path in ('/api/payments-due', '/api/payments-due-export'):
+                from payments_due_reconciliation import get_dashboard, export_missing
+                options = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=3)
+                allowed = {'country'} if parsed.path.endswith('-export') else {'country','page'}
+                if set(options) - allowed or any(len(items) != 1 for items in options.values()):
+                    raise ValueError('Unknown or repeated Due query parameter.')
+                country = options.get('country',[''])[0]
+                if parsed.path.endswith('-export'):
+                    self.respond(200, export_missing(self.server.database_settings,country),
+                        'text/csv; charset=utf-8', filename='uganda_payments_without_due.csv')
+                else:
+                    page = int(options.get('page',['0'])[0])
+                    self.json(200,get_dashboard(self.server.database_settings,country,page))
+            elif parsed.path == '/api/swap-sources':
+                self.json(200, swap_import_service.source_inventory(self.server.database_settings))
+            elif parsed.path.startswith('/api/swap-import-jobs/'):
+                key = parsed.path.removeprefix('/api/swap-import-jobs/')
+                self.json(200, self.server.swap_imports.status(key))
+            elif parsed.path == '/api/payments-sources':
+                self.json(200, payments_import_service.source_inventory(self.server.database_settings))
+            elif parsed.path.startswith('/api/payments-import-jobs/'):
+                key = parsed.path.removeprefix('/api/payments-import-jobs/')
+                self.json(200, self.server.payment_imports.status(key))
             elif parsed.path == '/api/sources':
                 self.json(200, source_inventory(self.server.database_settings))
             elif parsed.path == '/api/filter-dates':
@@ -308,6 +368,30 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 with snapshot(self.server.database_settings) as backend:
                     body, _ = export_candidates(backend, filters)
                 self.respond(200, body, "text/csv; charset=utf-8", filename="spiro_review_candidates.csv")
+            elif parsed.path == "/api/payments-wallet-summary":
+                from payments_wallet_reconciliation import get_summary
+                result = get_summary(self.server.database_settings)
+                self.json(200, result)
+            elif parsed.path == "/api/payments-wallet-missing":
+                from payments_wallet_reconciliation import get_missing_transactions
+                page = int(parse_qs(parsed.query).get("page", ["0"])[0])
+                limit = 50
+                offset = page * limit
+                result = get_missing_transactions(self.server.database_settings, limit=limit, offset=offset)
+                self.json(200, result)
+            elif parsed.path == "/api/payments-swap-summary":
+                from payments_swap_reconciliation import get_summary
+                result = get_summary(self.server.database_settings)
+                self.json(200, result)
+            elif parsed.path == "/api/payments-swap-missing":
+                from payments_swap_reconciliation import get_missing_transactions
+                options = parse_qs(parsed.query)
+                page = int(options.get("page", ["0"])[0])
+                direction = options.get("direction", ["payments"])[0]
+                limit = 50
+                offset = page * limit
+                result = get_missing_transactions(self.server.database_settings, limit=limit, offset=offset, direction=direction)
+                self.json(200, result)
             else:
                 self.json(404, {"error": "Page was not found."})
         except ValueError as exc:
@@ -323,6 +407,16 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not self.allowed_request():
             return
         path = urlsplit(self.path).path
+        imports = self.server.imports
+        if path == '/api/due-uploads' or path.startswith('/api/due-import-jobs/'):
+            imports = self.server.due_imports
+            path = path.replace('/api/due-', '/api/', 1)
+        elif path == '/api/swap-uploads' or path.startswith('/api/swap-import-jobs/'):
+            imports = self.server.swap_imports
+            path = path.replace('/api/swap-', '/api/', 1)
+        elif path == '/api/payments-uploads' or path.startswith('/api/payments-import-jobs/'):
+            imports = self.server.payment_imports
+            path = path.replace('/api/payments-', '/api/', 1)
         if path != '/api/uploads' and not path.startswith('/api/import-jobs/'):
             self.json(405, {'error': 'Only CSV upload and import actions accept POST requests.'})
             return
@@ -343,7 +437,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
                     self.close_connection = True
                     self.json(413, {'error': 'Choose a nonempty CSV smaller than 512 MB. Split larger exports by date.'})
                     return
-                key, target = self.server.imports.reserve(unquote(self.headers.get('X-Filename', '')))
+                key, target = imports.reserve(unquote(self.headers.get('X-Filename', '')))
                 original_timeout = self.connection.gettimeout()
                 self.connection.settimeout(UPLOAD_IDLE_TIMEOUT)
                 try:
@@ -356,31 +450,31 @@ class DashboardHandler(BaseHTTPRequestHandler):
                                 raise ValueError('Upload was interrupted. Choose the file again.')
                             output.write(chunk)
                             remaining -= len(chunk)
-                            self.server.imports.update(key, received_bytes=size-remaining)
+                            imports.update(key, received_bytes=size-remaining)
                 finally:
                     self.connection.settimeout(original_timeout)
-                self.server.imports.validate(key)
-                self.json(202, self.server.imports.status(key))
+                imports.validate(key)
+                self.json(202, imports.status(key))
             else:
                 parts = path.removeprefix('/api/import-jobs/').split('/')
                 if len(parts) != 2 or parts[1] not in ('commit', 'discard'):
                     self.json(404, {'error': 'Import action was not found.'})
                     return
                 if parts[1] == 'commit':
-                    self.json(202, self.server.imports.commit(parts[0]))
+                    self.json(202, imports.commit(parts[0]))
                 else:
-                    self.server.imports.discard(parts[0])
+                    imports.discard(parts[0])
                     self.json(200, {'discarded': True})
         except ValueError as exc:
             if key:
-                self.server.imports.abort(key)
+                imports.abort(key)
             self.close_connection = True
             self.json(400, {'error': str(exc)})
         except KeyError:
             self.json(404, {'error': SESSION_EXPIRED_ERROR})
         except (OSError, TimeoutError):
             if key:
-                self.server.imports.abort(key)
+                imports.abort(key)
             self.close_connection = True
             try:
                 self.json(400, {'error': 'The file could not be uploaded. Choose it again.'})

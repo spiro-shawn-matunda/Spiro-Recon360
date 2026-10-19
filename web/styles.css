@@ -41,3 +41,27 @@ main{margin-left:236px}
 
 /* Date choices reflect the active module source, including gaps. */
 .filter-bar{flex-wrap:wrap}.date-coverage{flex:0 0 100%;margin:0;font-size:11px;line-height:1.6;color:var(--muted)}
+
+.payments-submenu{max-height:200px;overflow:hidden;transition:max-height 0.3s ease;display:block}
+.payments-submenu.hidden{max-height:0}
+/* Native Payments dropdown works independently of page data loading. */
+.payments-navigation { width: 100%; }
+.payments-navigation > .payments-toggle { list-style: none; width: 100%; cursor: pointer; color: inherit; background: none; border: 0; text-align: left; }
+.payments-navigation > .payments-toggle::-webkit-details-marker { display: none; }
+.payments-navigation > .payments-toggle:hover { background: #2d5141; }
+.payments-chevron { margin-left: auto; flex-shrink: 0; transition: transform 150ms ease; }
+.payments-navigation[open] .payments-chevron { transform: rotate(180deg); }
+@media (max-width: 750px) {
+  .payments-navigation { position: relative; width: auto; margin-left: 12px; }
+  .payments-navigation > .payments-toggle { margin: 0; gap: 7px; }
+  .payments-navigation .nav-item span { display: inline; }
+  .payments-navigation .payments-submenu { position: absolute; right: 0; top: calc(100% + 8px); min-width: 165px; padding: 8px; border-radius: 8px; background: #17392d; box-shadow: 0 8px 20px #16271833; z-index: 10; }
+  .payments-navigation .payments-submenu .nav-item { margin: 0; padding: 12px !important; }
+}
+
+.due-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 750px) { .due-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 450px) { .due-metrics { grid-template-columns: 1fr; } }
+
+.due-filter-note { font-size: 12px; color: var(--muted); line-height: 1.6; margin: 10px 0 16px; }
+.payments-submenu .sub-item { margin-top: 4px; padding-left: 24px; font-size: 12px; }

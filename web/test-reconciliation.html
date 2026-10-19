@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Reconciliation</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; }
+        .card { border: 1px solid #ddd; padding: 15px; margin: 10px 0; background: #f9f9f9; }
+        .value { font-size: 32px; font-weight: bold; color: #333; }
+        .label { font-size: 12px; color: #666; margin-top: 5px; }
+        button { padding: 10px 20px; margin: 10px 0; cursor: pointer; }
+        pre { background: #f0f0f0; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>Reconciliation Test Page</h1>
+
+    <button onclick="testAPI()">Test Wallet API</button>
+    <button onclick="loadAndDisplay()">Load & Display Data</button>
+
+    <div id="status" style="margin: 20px 0; padding: 10px; background: #e3f2fd;"></div>
+
+    <h2>Summary Cards</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 15px;">
+        <div class="card">
+            <div class="label">ATLAS TOTAL</div>
+            <div class="value" id="atlas-total">—</div>
+        </div>
+        <div class="card">
+            <div class="label">WALLET TOTAL</div>
+            <div class="value" id="wallet-total">—</div>
+        </div>
+        <div class="card">
+            <div class="label">MATCHED</div>
+            <div class="value" id="matched">—</div>
+        </div>
+        <div class="card">
+            <div class="label">MISSING</div>
+            <div class="value" id="missing-in-wallet">—</div>
+        </div>
+    </div>
+
+    <h2>API Response</h2>
+    <pre id="response">No data loaded yet</pre>
+
+    <script>
+        function updateStatus(msg) {
+            document.getElementById('status').textContent = msg;
+            console.log(msg);
+        }
+
+        async function testAPI() {
+            updateStatus('Testing API...');
+            try {
+                const response = await fetch('/api/payments-wallet-summary');
+                updateStatus(`API Response Status: ${response.status} ${response.statusText}`);
+                const data = await response.json();
+                document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                updateStatus('✓ API test successful!');
+            } catch (error) {
+                updateStatus('✗ API test failed: ' + error.message);
+            }
+        }
+
+        async function loadAndDisplay() {
+            updateStatus('Loading and displaying data...');
+            try {
+                const response = await fetch('/api/payments-wallet-summary');
+                const data = await response.json();
+
+                document.getElementById('atlas-total').textContent = data.atlas_total?.toLocaleString() || '—';
+                document.getElementById('wallet-total').textContent = data.wallet_total?.toLocaleString() || '—';
+                document.getElementById('matched').textContent = data.matched?.toLocaleString() || '—';
+                document.getElementById('missing-in-wallet').textContent = data.missing_in_wallet?.toLocaleString() || '—';
+
+                document.getElementById('response').textContent = JSON.stringify(data, null, 2);
+                updateStatus('✓ Data loaded and displayed successfully!');
+            } catch (error) {
+                updateStatus('✗ Failed to load data: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
